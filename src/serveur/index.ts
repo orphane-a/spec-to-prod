@@ -19,10 +19,21 @@ try {
 
 let journaliser: (message: string) => void = console.warn;
 const { executeurs, arreter } = creerExecuteurs(config, envoyerParHttp(`http://127.0.0.1:${config.PORT}`, config.WEBHOOK_SECRET), (m) => journaliser(m));
-const { serveur } = creerApp({ config, executeurs, journalisation: true });
+const { serveur, service } = creerApp({ config, executeurs, journalisation: true });
 journaliser = (m) => serveur.log.warn(m);
 
-serveur.addHook('onClose', async () => arreter());
+// Une session silencieuse (quota épuisé en cours de route, plantage) bloque son ticket au lieu de le laisser tourner.
+const surveillance = setInterval(() => {
+  service
+    .surveillerSilences(config.RUN_SILENCE_MAX_MIN)
+    .then((n) => n > 0 && serveur.log.warn(`${n} ticket(s) bloqué(s) faute de nouvelles de leur session.`))
+    .catch((e: unknown) => serveur.log.error(e));
+}, 60_000);
+
+serveur.addHook('onClose', async () => {
+  clearInterval(surveillance);
+  arreter();
+});
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
