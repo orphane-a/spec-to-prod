@@ -18,6 +18,8 @@ export class ExecuteurEspion implements Executeur {
   }
 }
 
+export const SECRET_TEST = 'secret-de-test-'.padEnd(40, 'x');
+
 export function creerAppTest() {
   const claude = new ExecuteurEspion();
   const deploiement = new ExecuteurEspion();
@@ -25,7 +27,7 @@ export function creerAppTest() {
   // Horloge qui avance d'une seconde à chaque lecture : ordre du journal déterministe.
   const horloge = () => new Date((instant += 1000)).toISOString();
   const app = creerApp({
-    config: { BASE_CHEMIN: ':memory:', ITERATIONS_MAX: 5 },
+    config: { BASE_CHEMIN: ':memory:', ITERATIONS_MAX: 5, WEBHOOK_SECRET: SECRET_TEST },
     executeurs: { claude, deploiement },
     horloge,
   });

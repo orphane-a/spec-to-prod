@@ -121,6 +121,8 @@ function Spec({ ticket }: { ticket: Ticket }) {
 
 function Scenarios({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticket) => void }) {
   const [erreur, setErreur] = useState<string | null>(null);
+  // Valeurs affichées tout de suite, en attendant la réponse du serveur.
+  const [enAttente, setEnAttente] = useState<Record<number, boolean>>({});
   const modifiable = ticket.colonne === 'test';
 
   if (ticket.scenarios.length === 0) {
@@ -129,10 +131,17 @@ function Scenarios({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticke
 
   async function basculer(ordre: number, fait: boolean) {
     setErreur(null);
+    setEnAttente((e) => ({ ...e, [ordre]: fait }));
     try {
       remplacer(await api.marquerScenario(ticket.id, ordre, fait));
     } catch (e) {
       setErreur(e instanceof Error ? e.message : 'Enregistrement impossible.');
+    } finally {
+      setEnAttente((e) => {
+        const reste = { ...e };
+        delete reste[ordre];
+        return reste;
+      });
     }
   }
 
@@ -155,7 +164,7 @@ function Scenarios({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticke
       <ul className="liste-scenarios">
         {ticket.scenarios.map((s) => (
           <li key={s.id} className="scenario">
-            <input type="checkbox" id={`scenario-${s.id}`} checked={s.fait} disabled={!modifiable} onChange={(e) => basculer(s.id, e.target.checked)} />
+            <input type="checkbox" id={`scenario-${s.id}`} checked={enAttente[s.id] ?? s.fait} disabled={!modifiable} onChange={(e) => basculer(s.id, e.target.checked)} />
             <label htmlFor={`scenario-${s.id}`}>{s.objectif}</label>
             <dl>
               <dt>Étapes</dt>
