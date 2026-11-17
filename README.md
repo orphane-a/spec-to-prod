@@ -53,4 +53,5 @@ npm run typecheck
 - `src/domaine` : machine à états et types, sans dépendance au serveur ni au navigateur.
 - `src/serveur` : Fastify, base SQLite (`node:sqlite`), service des tickets, relais et webhooks.
 - `src/web` : interface React.
+- `taches-cloud` : prompts des tâches cloud Claude (spec, design, dev), script de signalement et guide `MISE_EN_ROUTE.md` pour passer en mode réel.
 - `tests` : tests unitaires, API, relais et bout en bout.

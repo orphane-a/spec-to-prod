@@ -19,7 +19,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/serveur/**/*.ts', 'tests/**/*.ts', '*.config.ts'],
+    files: ['src/serveur/**/*.ts', 'tests/**/*.ts', '*.config.ts', 'taches-cloud/**/*.{mjs,mts}'],
     languageOptions: { globals: globals.node },
   },
   {
