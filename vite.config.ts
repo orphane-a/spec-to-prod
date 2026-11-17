@@ -12,7 +12,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: `http://localhost:${portServeur}`, changeOrigin: false },
+      // Barre oblique finale : sans elle, le fichier /api.ts de l'interface partirait vers le serveur.
+      '/api/': { target: `http://localhost:${portServeur}`, changeOrigin: false },
     },
   },
 });
