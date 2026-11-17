@@ -6,7 +6,7 @@ export type Colonne = (typeof COLONNES)[number];
 export const ACTEURS = ['utilisatrice', 'systeme'] as const;
 export type Acteur = (typeof ACTEURS)[number];
 
-export const TYPES_RUN = ['spec', 'design', 'dev', 'deploiement'] as const;
+export const TYPES_RUN = ['spec', 'design', 'dev', 'preprod', 'deploiement'] as const;
 export type TypeRun = (typeof TYPES_RUN)[number];
 
 export const etatControleSchema = z.enum(['en_attente', 'en_cours', 'vert', 'rouge']);
@@ -89,10 +89,10 @@ export const evenementSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('DEV_TERMINE'),
-    urlPreprod: z.string(),
     controles: controlesDevSchema,
     scenarios: z.array(scenarioSaisieSchema),
   }),
+  z.object({ type: z.literal('PREPROD_DEPLOYEE'), urlPreprod: z.string(), version: z.string() }),
   z.object({ type: z.literal('DEPLOYER_PROD'), confirmation: z.boolean() }),
   z.object({ type: z.literal('ETAPE_DEPLOIEMENT'), etapes: etapesDeploiementSchema }),
   z.object({ type: z.literal('DEPLOIEMENT_TERMINE'), version: z.string() }),
@@ -111,6 +111,7 @@ export const TYPES_EVENEMENT = [
   'LANCER_DEV',
   'ITERATION_TERMINEE',
   'DEV_TERMINE',
+  'PREPROD_DEPLOYEE',
   'DEPLOYER_PROD',
   'ETAPE_DEPLOIEMENT',
   'DEPLOIEMENT_TERMINE',
@@ -148,4 +149,9 @@ export type ResultatTransition =
 export interface ContexteTransition {
   /** Date ISO de la transition, injectée pour garder la machine pure et testable. */
   maintenant: string;
+  /**
+   * Autre ticket du même projet qui occupe déjà la préprod (en test ou en cours de déploiement).
+   * Un projet n'a qu'une préprod : un seul ticket à la fois.
+   */
+  preprodOccupeePar?: number | null;
 }

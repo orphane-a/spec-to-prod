@@ -69,7 +69,7 @@ export function creerExecuteurReel(options: OptionsExecuteurReel): Executeur {
   return {
     async lancer(demande: DemandeRun): Promise<ReponseLancement> {
       const { run, projet } = demande;
-      if (run.type === 'deploiement') throw new Error('le déploiement passe par GitHub Actions, pas par une tâche Claude.');
+      if (run.type === 'preprod' || run.type === 'deploiement') throw new Error('les déploiements passent par GitHub Actions, pas par une tâche Claude.');
       verifierProjet(projet);
 
       const texte = JSON.stringify(construireCharge(demande, options.urlRelais), null, 2);

@@ -34,13 +34,25 @@ async function requete<T>(url: string, init: RequestInit = {}): Promise<T> {
   }
   if (reponse.status === 204) return undefined as T;
   const corps = await reponse.json().catch(() => null);
+  // Session expirée : la garde de l'application affiche l'écran de connexion.
+  if (reponse.status === 401 && corps?.code === 'NON_CONNECTE') window.dispatchEvent(new Event(EVENEMENT_DECONNEXION));
   if (!reponse.ok) throw new ErreurApi(corps?.message ?? 'Une erreur inattendue est survenue.');
   return corps as T;
+}
+
+export const EVENEMENT_DECONNEXION = 'spec-to-prod:deconnecte';
+
+export interface EtatSession {
+  protege: boolean;
+  connecte: boolean;
 }
 
 const json = (corps: unknown) => JSON.stringify(corps);
 
 export const api = {
+  session: () => requete<EtatSession>('/api/session'),
+  connexion: (motDePasse: string) => requete<void>('/api/connexion', { method: 'POST', body: json({ motDePasse }) }),
+  deconnexion: () => requete<void>('/api/deconnexion', { method: 'POST' }),
   tickets: () => requete<Ticket[]>('/api/tickets'),
   projets: () => requete<Projet[]>('/api/projets'),
   quota: () => requete<Quota>('/api/quota'),

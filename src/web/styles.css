@@ -828,3 +828,22 @@ dialog::backdrop {
 .panneau .fenetre-contenu {
   min-height: 100%;
 }
+
+/* Écran de connexion : tableau protégé par un mot de passe unique. */
+.connexion {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px;
+}
+
+.formulaire-connexion {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

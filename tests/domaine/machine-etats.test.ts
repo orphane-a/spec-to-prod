@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { actionsDisponibles, transition } from '../../src/domaine/machine-etats';
 import { indexColonne, nomBranche } from '../../src/domaine/colonnes';
 import { ACTEURS, COLONNES, TYPES_EVENEMENT, type Acteur, type Colonne, type TypeEvenement } from '../../src/domaine/types';
-import { CTX, EVENEMENTS, MAINTENANT, SCENARIOS, TOUT_VERT, URL_MAQUETTE, ticket, ticketFavorable } from './fixtures';
+import { CTX, EVENEMENTS, MAINTENANT, SCENARIOS, SCENARIOS_ENREGISTRES, TOUT_VERT, URL_MAQUETTE, ticket, ticketFavorable } from './fixtures';
 
 /**
  * Table de vérité écrite à la main, indépendante du code : pour chaque événement,
@@ -15,7 +15,8 @@ const AUTORISE: Record<TypeEvenement, { acteur: Acteur; depuis: Colonne[]; vers:
   DESIGN_PRET: { acteur: 'systeme', depuis: ['conception'], vers: 'meme' },
   LANCER_DEV: { acteur: 'utilisatrice', depuis: ['conception'], vers: 'dev' },
   ITERATION_TERMINEE: { acteur: 'systeme', depuis: ['dev'], vers: 'meme' },
-  DEV_TERMINE: { acteur: 'systeme', depuis: ['dev'], vers: 'test' },
+  DEV_TERMINE: { acteur: 'systeme', depuis: ['dev'], vers: 'meme' },
+  PREPROD_DEPLOYEE: { acteur: 'systeme', depuis: ['dev'], vers: 'test' },
   DEPLOYER_PROD: { acteur: 'utilisatrice', depuis: ['test'], vers: 'deploiement' },
   ETAPE_DEPLOIEMENT: { acteur: 'systeme', depuis: ['deploiement'], vers: 'meme' },
   DEPLOIEMENT_TERMINE: { acteur: 'systeme', depuis: ['deploiement'], vers: 'done' },
@@ -278,23 +279,72 @@ describe('boucle de dev', () => {
   });
 });
 
-describe('En dev vers En test', () => {
+describe('fin du dev : déploiement en préprod', () => {
   const enDev = ticket({ colonne: 'dev', runEnCours: 'dev', spec: '# v1', iteration: 3 });
-  const fin = { type: 'DEV_TERMINE', urlPreprod: 'https://preprod.exemple.fr', controles: TOUT_VERT, scenarios: SCENARIOS } as const;
+  const fin = { type: 'DEV_TERMINE', controles: TOUT_VERT, scenarios: SCENARIOS } as const;
 
-  it('passe en test avec scénarios et préprod', () => {
+  it('garde les scénarios, reste en dev et lance la préprod', () => {
     const r = transition(enDev, fin, 'systeme', CTX);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.ticket.colonne).toBe('dev');
+    expect(r.ticket.runEnCours).toBe('preprod');
+    expect(r.ticket.scenarios).toHaveLength(2);
+    expect(r.ticket.scenarios.every((s) => !s.fait)).toBe(true);
+    expect(r.ticket.urlPreprod).toBe(null);
+    expect(r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'preprod' }]);
+  });
+
+  it('bloque sans lancer de déploiement quand un autre ticket du projet occupe la préprod', () => {
+    const r = transition(enDev, fin, 'systeme', { ...CTX, preprodOccupeePar: 7 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.ticket.colonne).toBe('dev');
+    expect(r.ticket.runEnCours).toBe(null);
+    expect(r.ticket.blocage).toMatchObject({ motif: 'Préprod occupée par le ticket 7.', cause: 'echec' });
+    expect(r.ticket.scenarios).toHaveLength(2);
+    expect(r.effets).toEqual([]);
+  });
+});
+
+describe('En dev vers En test', () => {
+  const enPreprod = ticket({ colonne: 'dev', runEnCours: 'preprod', spec: '# v1', iteration: 3, controles: TOUT_VERT, scenarios: SCENARIOS_ENREGISTRES });
+  const fin = { type: 'DEV_TERMINE', controles: TOUT_VERT, scenarios: SCENARIOS } as const;
+  const enDev = ticket({ colonne: 'dev', runEnCours: 'dev', spec: '# v1', iteration: 3 });
+
+  it('passe en test quand la préprod est confirmée en ligne', () => {
+    const r = transition(enPreprod, EVENEMENTS.PREPROD_DEPLOYEE, 'systeme', CTX);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.ticket.colonne).toBe('test');
     expect(r.ticket.urlPreprod).toBe('https://preprod.exemple.fr');
-    expect(r.ticket.scenarios).toHaveLength(2);
-    expect(r.ticket.scenarios.every((s) => !s.fait)).toBe(true);
     expect(r.ticket.runEnCours).toBe(null);
+    expect(r.journal.map((j) => j.detail).join(' ')).toContain('a1b2c3d');
   });
 
-  it('refuse sans préprod déployée', () => {
-    expect(transition(enDev, { ...fin, urlPreprod: '' }, 'systeme', CTX)).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  it('refuse une préprod sans lien web ou sans version', () => {
+    for (const evenement of [
+      { type: 'PREPROD_DEPLOYEE', urlPreprod: '', version: 'a1b2c3d' },
+      { type: 'PREPROD_DEPLOYEE', urlPreprod: 'preprod.exemple.fr', version: 'a1b2c3d' },
+      { type: 'PREPROD_DEPLOYEE', urlPreprod: 'https://preprod.exemple.fr', version: ' ' },
+    ] as const) {
+      expect(transition(enPreprod, evenement, 'systeme', CTX)).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+    }
+  });
+
+  it('refuse une préprod annoncée pendant la boucle de dev', () => {
+    expect(transition(enDev, EVENEMENTS.PREPROD_DEPLOYEE, 'systeme', CTX)).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+
+  it('un échec de préprod bloque en dev et garde les scénarios', () => {
+    const r = transition(enPreprod, { type: 'ECHEC', motif: 'SSH refusé.' }, 'systeme', CTX);
+    expect(r.ok && r.ticket.colonne).toBe('dev');
+    expect(r.ok && r.ticket.blocage?.motif).toBe('SSH refusé.');
+    expect(r.ok && r.ticket.scenarios).toHaveLength(2);
+  });
+
+  it('le quota Claude ne concerne pas la préprod', () => {
+    expect(transition(enPreprod, EVENEMENTS.QUOTA_ATTEINT, 'systeme', CTX)).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
   });
 
   it('refuse si un contrôle n’est pas vert', () => {
@@ -391,6 +441,37 @@ describe('blocages et relance', () => {
     for (const type of TYPES_EVENEMENT.filter((t) => t !== 'RELANCER')) {
       expect(transition(bloque, EVENEMENTS[type], 'systeme', CTX).ok).toBe(false);
     }
+  });
+
+  describe('relance après un échec de préprod', () => {
+    const devPret = ticket({
+      colonne: 'dev',
+      spec: '# v1',
+      iteration: 3,
+      controles: TOUT_VERT,
+      scenarios: SCENARIOS_ENREGISTRES,
+      blocage: { motif: 'SSH refusé.', cause: 'echec', le: MAINTENANT, repriseEstimee: null },
+    });
+
+    it('ne relance que la préprod, sans refaire le dev', () => {
+      const r = transition(devPret, EVENEMENTS.RELANCER, 'utilisatrice', CTX);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.ticket.runEnCours).toBe('preprod');
+      expect(r.ticket.iteration).toBe(3);
+      expect(r.ticket.scenarios).toHaveLength(2);
+      expect(r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'preprod' }]);
+    });
+
+    it('refuse tant que la préprod est occupée par un autre ticket', () => {
+      const r = transition(devPret, EVENEMENTS.RELANCER, 'utilisatrice', { ...CTX, preprodOccupeePar: 7 });
+      expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE', message: 'Préprod occupée par le ticket 7.' });
+    });
+
+    it('relance la boucle de dev si les contrôles ne sont pas tous verts', () => {
+      const r = transition({ ...devPret, controles: { ...TOUT_VERT, exploratoire: 'rouge' } }, EVENEMENTS.RELANCER, 'utilisatrice', CTX);
+      expect(r.ok && r.ticket.runEnCours).toBe('dev');
+    });
   });
 
   it('la relance en dev repart d’une boucle neuve', () => {

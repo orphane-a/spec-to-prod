@@ -41,5 +41,5 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   });
 }
 
-await serveur.listen({ port: config.PORT, host: '127.0.0.1' });
+await serveur.listen({ port: config.PORT, host: config.HOST });
 serveur.log.info(`Spec to prod écoute sur le port ${config.PORT}, mode Claude : ${config.CLAUDE_MODE}`);

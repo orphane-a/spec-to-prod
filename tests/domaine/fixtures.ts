@@ -40,6 +40,9 @@ export const SCENARIOS = [
   { objectif: 'Cas d’erreur', etapes: 'Saisir un nom vide', resultatAttendu: 'Un message d’erreur apparaît' },
 ];
 
+/** Scénarios tels que le ticket les garde après DEV_TERMINE. */
+export const SCENARIOS_ENREGISTRES = SCENARIOS.map((s, i) => ({ ...s, id: i + 1, fait: false }));
+
 export const URL_MAQUETTE = 'https://github.com/orphane-a/optivie/blob/claude/12-fiche-personnage/maquettes/ticket-12.html';
 
 /** Un événement valide de chaque type, avec une charge utile correcte. */
@@ -50,7 +53,8 @@ export const EVENEMENTS: Record<TypeEvenement, Evenement> = {
   DESIGN_PRET: { type: 'DESIGN_PRET', resume: '# Design\n\nÉcrans.', urlMaquette: URL_MAQUETTE },
   LANCER_DEV: { type: 'LANCER_DEV' },
   ITERATION_TERMINEE: { type: 'ITERATION_TERMINEE', iteration: 1, controles: { unitaires: 'vert', non_regression: 'en_cours', exploratoire: 'en_attente' } },
-  DEV_TERMINE: { type: 'DEV_TERMINE', urlPreprod: 'https://preprod.exemple.fr', controles: TOUT_VERT, scenarios: SCENARIOS },
+  DEV_TERMINE: { type: 'DEV_TERMINE', controles: TOUT_VERT, scenarios: SCENARIOS },
+  PREPROD_DEPLOYEE: { type: 'PREPROD_DEPLOYEE', urlPreprod: 'https://preprod.exemple.fr', version: 'a1b2c3d' },
   DEPLOYER_PROD: { type: 'DEPLOYER_PROD', confirmation: true },
   ETAPE_DEPLOIEMENT: { type: 'ETAPE_DEPLOIEMENT', etapes: { fusion: 'vert', envoi: 'en_cours', verification: 'en_attente' } },
   DEPLOIEMENT_TERMINE: { type: 'DEPLOIEMENT_TERMINE', version: 'v1.4.0' },
@@ -87,6 +91,9 @@ export function ticketFavorable(colonne: Ticket['colonne'], type: TypeEvenement,
     case 'ITERATION_TERMINEE':
     case 'DEV_TERMINE':
       base.runEnCours = 'dev';
+      break;
+    case 'PREPROD_DEPLOYEE':
+      Object.assign(base, { runEnCours: 'preprod', controles: TOUT_VERT, scenarios: SCENARIOS_ENREGISTRES });
       break;
     case 'ETAPE_DEPLOIEMENT':
     case 'DEPLOIEMENT_TERMINE':

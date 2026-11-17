@@ -82,7 +82,7 @@ describe('actions de l’utilisatrice', () => {
     expect(app.claude.demandes).toHaveLength(1);
     expect(app.claude.dernierRun()).toMatchObject({ type: 'spec', statut: 'en_cours', ticketId: id });
     const journal = (await app.serveur.inject(`/api/tickets/${id}/journal`)).json();
-    expect(journal.map((j: { detail: string }) => j.detail)).toContain('Session démarrée : https://claude.ai/code/session-test');
+    expect(journal.map((j: { detail: string }) => j.detail)).toContain('Session Claude démarrée : https://claude.ai/code/session-test');
   });
 
   it('refuse Lancer le dev sans spec, en 409 avec le code de la machine', async () => {
@@ -167,8 +167,16 @@ describe('parcours complet jusqu’en Done', () => {
     const runDev = app.claude.dernierRun();
 
     await app.service.recevoir(runDev.id, { type: 'ITERATION_TERMINEE', iteration: 1, controles: { ...TOUT_VERT, exploratoire: 'rouge' } });
-    r = await app.service.recevoir(runDev.id, { type: 'DEV_TERMINE', urlPreprod: 'https://preprod.optivie.orphane.fr', controles: TOUT_VERT, scenarios: SCENARIOS });
-    expect(r).toMatchObject({ ignore: false, ticket: { colonne: 'test', iteration: 1 } });
+    r = await app.service.recevoir(runDev.id, { type: 'DEV_TERMINE', controles: TOUT_VERT, scenarios: SCENARIOS });
+    expect(r).toMatchObject({ ignore: false, ticket: { colonne: 'dev', runEnCours: 'preprod', iteration: 1 } });
+    expect(app.depots.runs.lire(runDev.id)?.statut).toBe('termine');
+
+    // La préprod passe par le pipeline du projet, avec le projet et sa branche principale.
+    const runPreprod = app.deploiement.dernierRun();
+    expect(runPreprod.type).toBe('preprod');
+    expect(app.deploiement.demandes.at(-1)?.projet).toMatchObject({ depot: 'orphane-a/optivie', branchePrincipale: 'master' });
+    r = await app.service.recevoir(runPreprod.id, { type: 'PREPROD_DEPLOYEE', urlPreprod: 'https://preprod.optivie.orphane.fr', version: 'a1b2c3d' });
+    expect(r).toMatchObject({ ignore: false, ticket: { colonne: 'test', urlPreprod: 'https://preprod.optivie.orphane.fr' } });
 
     const coche = await app.serveur.inject({ method: 'PATCH', url: `/api/tickets/${id}/scenarios/1`, payload: { fait: true } });
     expect(coche.json().scenarios[0].fait).toBe(true);
@@ -176,7 +184,7 @@ describe('parcours complet jusqu’en Done', () => {
     expect((await agir(app, id, 'deployer-prod')).statusCode).toBe(409);
     const prod = await agir(app, id, 'deployer-prod', { confirmation: true });
     expect(prod.json().colonne).toBe('deploiement');
-    expect(app.deploiement.demandes).toHaveLength(1);
+    expect(app.deploiement.demandes).toHaveLength(2);
     const runProd = app.deploiement.dernierRun();
 
     await app.service.recevoir(runProd.id, { type: 'ETAPE_DEPLOIEMENT', etapes: { fusion: 'vert', envoi: 'en_cours', verification: 'en_attente' } });
@@ -232,6 +240,46 @@ describe('parcours complet jusqu’en Done', () => {
     const { id } = await creerTicket(app);
     const r = await app.serveur.inject({ method: 'PATCH', url: `/api/tickets/${id}/scenarios/1`, payload: { fait: true } });
     expect(r.statusCode).toBe(409);
+  });
+});
+
+describe('une seule préprod par projet', () => {
+  /** Mène un ticket jusqu'à la fin du dev et renvoie son identifiant. */
+  async function jusquaFinDuDev(projetId: number, titre: string) {
+    const { id } = await creerTicket(app, { titre, projetId });
+    await agir(app, id, 'lancer-conception');
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'SPEC_PRETE', spec: '# Spec' });
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'DESIGN_PRET', resume: '# D', urlMaquette: 'https://github.com/o/r/blob/b/m.html' });
+    await agir(app, id, 'lancer-dev');
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'DEV_TERMINE', controles: TOUT_VERT, scenarios: SCENARIOS });
+    return id;
+  }
+
+  it('bloque le deuxième ticket du projet, puis la relance part quand la préprod se libère', async () => {
+    const premier = await jusquaFinDuDev(3, 'Premier');
+    await app.service.recevoir(app.deploiement.dernierRun().id, { type: 'PREPROD_DEPLOYEE', urlPreprod: 'https://preprod.optivie.orphane.fr', version: 'a1' });
+    expect(app.service.lire(premier).colonne).toBe('test');
+
+    const second = await jusquaFinDuDev(3, 'Second');
+    expect(app.service.lire(second)).toMatchObject({ colonne: 'dev', runEnCours: null, blocage: { motif: `Préprod occupée par le ticket ${premier}.` } });
+    expect(app.deploiement.demandes).toHaveLength(1);
+
+    // Tant que le premier est en test, la relance est refusée.
+    const refus = await agir(app, second, 'relancer');
+    expect(refus.statusCode).toBe(409);
+    expect(refus.json().message).toBe(`Préprod occupée par le ticket ${premier}.`);
+
+    // Le premier part en prod : la préprod est libre, la relance ne refait que la préprod.
+    await agir(app, premier, 'deployer-prod', { confirmation: true });
+    const relance = await agir(app, second, 'relancer');
+    expect(relance.json()).toMatchObject({ colonne: 'dev', runEnCours: 'preprod', blocage: null });
+    expect(app.deploiement.dernierRun().type).toBe('preprod');
+  });
+
+  it('deux projets différents ont chacun leur préprod', async () => {
+    await jusquaFinDuDev(3, 'Optivie');
+    const autre = await jusquaFinDuDev(4, 'Programme');
+    expect(app.service.lire(autre)).toMatchObject({ runEnCours: 'preprod', blocage: null });
   });
 });
 

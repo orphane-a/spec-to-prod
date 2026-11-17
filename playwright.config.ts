@@ -26,6 +26,7 @@ export default defineConfig({
       BASE_CHEMIN: 'test-results/e2e.db',
       CLAUDE_MODE: 'simule',
       SIMULATION_DELAI_MS: '150',
+      MOT_DE_PASSE: 'mot-de-passe-des-tests-e2e',
     },
   },
 });

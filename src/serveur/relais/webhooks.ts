@@ -28,8 +28,8 @@ export const SOURCES: Record<'claude' | 'pipeline', Source> = {
   },
   pipeline: {
     chemin: '/relais/webhooks/pipeline',
-    runs: ['deploiement'],
-    evenements: ['ETAPE_DEPLOIEMENT', 'DEPLOIEMENT_TERMINE', 'ECHEC'],
+    runs: ['preprod', 'deploiement'],
+    evenements: ['PREPROD_DEPLOYEE', 'ETAPE_DEPLOIEMENT', 'DEPLOIEMENT_TERMINE', 'ECHEC'],
   },
 };
 

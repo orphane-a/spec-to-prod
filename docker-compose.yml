@@ -1,0 +1,29 @@
+# Déploiement par Coolify : le domaine (par exemple kanban.orphane.fr) se règle sur le service « kanban ».
+# Les valeurs secrètes se saisissent dans Coolify, jamais dans ce fichier.
+services:
+  kanban:
+    build: .
+    expose:
+      - "3000"
+    environment:
+      # Commit déployé, fourni par Coolify, affiché par GET /api/sante.
+      SOURCE_COMMIT: ${SOURCE_COMMIT:-local}
+      CLAUDE_MODE: ${CLAUDE_MODE:-reel}
+      MOT_DE_PASSE: ${MOT_DE_PASSE}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      RELAIS_URL_PUBLIQUE: ${RELAIS_URL_PUBLIQUE}
+      GITHUB_JETON: ${GITHUB_JETON}
+      ROUTINE_SPEC_URL: ${ROUTINE_SPEC_URL}
+      ROUTINE_SPEC_JETON: ${ROUTINE_SPEC_JETON}
+      ROUTINE_DESIGN_URL: ${ROUTINE_DESIGN_URL}
+      ROUTINE_DESIGN_JETON: ${ROUTINE_DESIGN_JETON}
+      ROUTINE_DEV_URL: ${ROUTINE_DEV_URL}
+      ROUTINE_DEV_JETON: ${ROUTINE_DEV_JETON}
+      ITERATIONS_MAX: ${ITERATIONS_MAX:-5}
+      RUN_SILENCE_MAX_MIN: ${RUN_SILENCE_MAX_MIN:-60}
+    volumes:
+      - donnees:/app/donnees
+    restart: unless-stopped
+
+volumes:
+  donnees:
