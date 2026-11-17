@@ -23,8 +23,8 @@ interface Source {
 export const SOURCES: Record<'claude' | 'pipeline', Source> = {
   claude: {
     chemin: '/relais/webhooks/claude',
-    runs: ['spec', 'dev'],
-    evenements: ['SPEC_PRETE', 'ITERATION_TERMINEE', 'DEV_TERMINE', 'ECHEC', 'QUOTA_ATTEINT'],
+    runs: ['spec', 'design', 'dev'],
+    evenements: ['SPEC_PRETE', 'DESIGN_PRET', 'ITERATION_TERMINEE', 'DEV_TERMINE', 'ECHEC', 'QUOTA_ATTEINT'],
   },
   pipeline: {
     chemin: '/relais/webhooks/pipeline',

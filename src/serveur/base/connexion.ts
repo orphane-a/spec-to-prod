@@ -26,10 +26,19 @@ function migrer(base: Base): void {
     const version = Number(fichier.slice(0, 3));
     if (version <= versionActuelle) continue;
     const sql = readFileSync(DOSSIER_MIGRATIONS + fichier, 'utf8');
-    enTransaction(base, () => {
-      base.exec(sql);
-      base.exec(`PRAGMA user_version = ${version};`);
-    });
+    // Procédure SQLite de reconstruction de table : clés étrangères coupées hors transaction,
+    // sinon supprimer une table déclencherait les suppressions en cascade.
+    base.exec('PRAGMA foreign_keys = OFF;');
+    try {
+      enTransaction(base, () => {
+        base.exec(sql);
+        const orphelins = base.prepare('PRAGMA foreign_key_check').all();
+        if (orphelins.length > 0) throw new Error(`Migration ${fichier} : ${orphelins.length} références cassées.`);
+        base.exec(`PRAGMA user_version = ${version};`);
+      });
+    } finally {
+      base.exec('PRAGMA foreign_keys = ON;');
+    }
   }
 }
 

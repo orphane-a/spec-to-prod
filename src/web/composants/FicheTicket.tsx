@@ -22,6 +22,7 @@ interface Props {
 const ONGLETS: { id: OngletFiche; libelle: string }[] = [
   { id: 'description', libelle: 'Description' },
   { id: 'spec', libelle: 'Spec' },
+  { id: 'design', libelle: 'Design' },
   { id: 'scenarios', libelle: 'Scénarios' },
   { id: 'journal', libelle: 'Journal' },
 ];
@@ -72,6 +73,7 @@ export function FicheTicket({ ticket, projet, ongletInitial, fermer, modifier, s
       <div role="tabpanel" id={`panneau-${onglet}`} aria-labelledby={`onglet-${onglet}`} className="section">
         {onglet === 'description' && <Description ticket={ticket} modifier={modifier} supprimer={supprimer} />}
         {onglet === 'spec' && <Spec ticket={ticket} />}
+        {onglet === 'design' && <Design ticket={ticket} />}
         {onglet === 'scenarios' && <Scenarios ticket={ticket} remplacer={remplacer} />}
         {onglet === 'journal' && <Journal ticket={ticket} />}
       </div>
@@ -114,6 +116,26 @@ function Spec({ ticket }: { ticket: Ticket }) {
   return (
     <>
       <p className="texte-petit">Version {ticket.specVersion}</p>
+      <div className="spec" dangerouslySetInnerHTML={{ __html: html }} />
+    </>
+  );
+}
+
+function Design({ ticket }: { ticket: Ticket }) {
+  const html = useMemo(() => (ticket.design ? DOMPurify.sanitize(marked.parse(ticket.design, { async: false })) : ''), [ticket.design]);
+  if (!ticket.design) {
+    return <p className="texte">{ticket.runEnCours === 'design' ? 'Claude conçoit la maquette. Elle apparaîtra ici.' : 'Pas encore de design pour ce ticket.'}</p>;
+  }
+  return (
+    <>
+      <p className="texte-petit">Version {ticket.designVersion}</p>
+      {ticket.urlMaquette && /^https?:\/\//i.test(ticket.urlMaquette) && (
+        <p style={{ marginTop: 0 }}>
+          <a href={ticket.urlMaquette} target="_blank" rel="noreferrer noopener">
+            Ouvrir la maquette
+          </a>
+        </p>
+      )}
       <div className="spec" dangerouslySetInnerHTML={{ __html: html }} />
     </>
   );
@@ -179,6 +201,19 @@ function Scenarios({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticke
   );
 }
 
+/** Rend cliquables les liens du journal (session Claude, maquette, préprod). */
+function avecLiens(texte: string) {
+  return texte.split(/(https:\/\/[^\s]+[^\s.,;:!?)])/g).map((morceau, i) =>
+    i % 2 === 1 ? (
+      <a key={i} href={morceau} target="_blank" rel="noreferrer noopener">
+        {morceau}
+      </a>
+    ) : (
+      morceau
+    ),
+  );
+}
+
 function Journal({ ticket }: { ticket: Ticket }) {
   const [entrees, setEntrees] = useState<EvenementJournal[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -204,7 +239,7 @@ function Journal({ ticket }: { ticket: Ticket }) {
       {[...entrees].reverse().map((e) => (
         <li key={e.id} className={`entree-journal${e.type === 'blocage' ? ' blocage' : ''}`}>
           <time dateTime={e.date}>{formaterHorodatage(e.date)}</time>
-          <span>{e.detail}</span>
+          <span>{avecLiens(e.detail)}</span>
         </li>
       ))}
     </ol>

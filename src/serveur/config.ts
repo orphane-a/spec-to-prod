@@ -2,6 +2,12 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { verifierEnvironnement } from './garde-fous';
 
+const URL_FIRE = /^https:\/\/api\.anthropic\.com\/v1\/claude_code\/routines\/trig_[A-Za-z0-9]+\/fire$/;
+const ETAPES = ['SPEC', 'DESIGN', 'DEV'] as const;
+
+const urlTache = z.string().regex(URL_FIRE, 'URL attendue : https://api.anthropic.com/v1/claude_code/routines/trig_.../fire').optional();
+const jetonTache = z.string().min(20, 'jeton trop court').optional();
+
 const schema = z
   .object({
     PORT: z.coerce.number().int().positive().default(3000),
@@ -10,22 +16,46 @@ const schema = z
     SIMULATION_DELAI_MS: z.coerce.number().int().nonnegative().default(3000),
     ITERATIONS_MAX: z.coerce.number().int().min(1).max(20).default(5),
     WEBHOOK_SECRET: z.string().min(32, 'WEBHOOK_SECRET doit contenir au moins 32 caractères').optional(),
+    /** Minutes sans nouvelles d'un run avant de bloquer le ticket. */
+    RUN_SILENCE_MAX_MIN: z.coerce.number().int().min(5).max(24 * 60).default(60),
+    RELAIS_URL_PUBLIQUE: z.url({ protocol: /^https$/, error: 'RELAIS_URL_PUBLIQUE doit être une adresse https' }).optional(),
+    ROUTINE_SPEC_URL: urlTache,
+    ROUTINE_SPEC_JETON: jetonTache,
+    ROUTINE_DESIGN_URL: urlTache,
+    ROUTINE_DESIGN_JETON: jetonTache,
+    ROUTINE_DEV_URL: urlTache,
+    ROUTINE_DEV_JETON: jetonTache,
   })
-  .refine((c) => c.CLAUDE_MODE === 'simule' || c.WEBHOOK_SECRET, {
-    message: 'WEBHOOK_SECRET est obligatoire en mode reel',
-    path: ['WEBHOOK_SECRET'],
+  .superRefine((c, ctx) => {
+    if (c.CLAUDE_MODE !== 'reel') return;
+    const obligatoires = [
+      'WEBHOOK_SECRET',
+      'RELAIS_URL_PUBLIQUE',
+      ...ETAPES.flatMap((e) => [`ROUTINE_${e}_URL`, `ROUTINE_${e}_JETON`] as const),
+    ] as const;
+    for (const nom of obligatoires) {
+      if (!c[nom]) ctx.addIssue({ code: 'custom', path: [nom], message: `${nom} est obligatoire en mode reel` });
+    }
   });
 
-export type Config = Omit<z.infer<typeof schema>, 'WEBHOOK_SECRET'> & { WEBHOOK_SECRET: string };
+type Brut = z.infer<typeof schema>;
+export type Config = Omit<Brut, 'WEBHOOK_SECRET'> & { WEBHOOK_SECRET: string };
 
 export function lireConfig(env: NodeJS.ProcessEnv = process.env): Config {
   verifierEnvironnement(env);
-  const vide = (v: string | undefined) => (v === '' ? undefined : v);
-  const resultat = schema.safeParse({ ...env, WEBHOOK_SECRET: vide(env.WEBHOOK_SECRET) });
+  // Une variable vide dans .env vaut une variable absente.
+  const nettoye = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== ''));
+  const resultat = schema.safeParse(nettoye);
   if (!resultat.success) {
     const details = resultat.error.issues.map((i) => `${i.path.join('.')} : ${i.message}`).join('\n');
     throw new Error(`Configuration invalide :\n${details}`);
   }
   // En mode simulé, le faux Claude vit dans le même processus : un secret éphémère suffit.
   return { ...resultat.data, WEBHOOK_SECRET: resultat.data.WEBHOOK_SECRET ?? randomBytes(32).toString('hex') };
+}
+
+/** Tâches cloud de la config, garanties présentes en mode reel par la validation. */
+export function tachesCloud(config: Config) {
+  const tache = (e: (typeof ETAPES)[number]) => ({ url: config[`ROUTINE_${e}_URL`]!, jeton: config[`ROUTINE_${e}_JETON`]! });
+  return { spec: tache('SPEC'), design: tache('DESIGN'), dev: tache('DEV') };
 }

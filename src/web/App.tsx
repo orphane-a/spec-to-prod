@@ -134,6 +134,7 @@ export function App() {
                     occupe={occupes.has(ticket.id)}
                     ouvrir={(onglet) => setFenetre({ type: 'fiche', id: ticket.id, onglet: onglet ?? (ticket.blocage ? 'journal' : 'description') })}
                     lancerConception={() => agir(ticket, 'lancer-conception')}
+                    lancerDesign={() => agir(ticket, 'lancer-design')}
                     lancerDev={() => agir(ticket, 'lancer-dev')}
                     demanderDeploiement={() => setFenetre({ type: 'deploiement', id: ticket.id })}
                     relancer={() => agir(ticket, 'relancer')}

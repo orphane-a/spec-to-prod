@@ -3,7 +3,7 @@ import { actionsDisponibles } from '../../domaine/machine-etats';
 import { formaterHeure, formaterJour, pluriel } from '../format';
 import { IconeAlerte, IconeCercle, IconeCoche, IconeCroix, IconeRotation } from './Icones';
 
-export type OngletFiche = 'description' | 'spec' | 'scenarios' | 'journal';
+export type OngletFiche = 'description' | 'spec' | 'design' | 'scenarios' | 'journal';
 
 interface Props {
   ticket: Ticket;
@@ -11,6 +11,7 @@ interface Props {
   occupe: boolean;
   ouvrir: (onglet?: OngletFiche) => void;
   lancerConception: () => void;
+  lancerDesign: () => void;
   lancerDev: () => void;
   demanderDeploiement: () => void;
   relancer: () => void;
@@ -95,15 +96,57 @@ function Corps(props: Props) {
           </>
         );
       }
+      if (ticket.runEnCours === 'design') {
+        return (
+          <>
+            <p className="statut valide">
+              <IconeCoche />
+              Spec prête
+            </p>
+            <p className="statut en-cours">
+              <IconeRotation />
+              Claude conçoit la maquette
+            </p>
+            <button type="button" className="bouton bouton-contour" onClick={() => props.ouvrir('spec')}>
+              Lire la spec
+            </button>
+            <button type="button" className="bouton bouton-attente" disabled aria-describedby={`attente-${ticket.id}`}>
+              Lancer le dev
+            </button>
+            <p className="texte-petit" id={`attente-${ticket.id}`}>
+              Disponible quand la maquette est prête.
+            </p>
+          </>
+        );
+      }
+      if (!ticket.urlMaquette) {
+        return (
+          <>
+            <p className="statut valide">
+              <IconeCoche />
+              Spec prête
+            </p>
+            <p className="texte">Il manque la maquette avant le développement.</p>
+            <button type="button" className="bouton bouton-contour" onClick={() => props.ouvrir('spec')}>
+              Lire la spec
+            </button>
+            <button type="button" className="bouton bouton-ambre" disabled={occupe || !actions.includes('LANCER_DESIGN')} onClick={props.lancerDesign}>
+              Lancer le design
+            </button>
+          </>
+        );
+      }
       return (
         <>
           <p className="statut valide">
             <IconeCoche />
-            Spec prête
+            Spec et maquette prêtes
           </p>
-          <p className="texte">Version {ticket.specVersion} prête à relire avant le développement.</p>
-          <button type="button" className="bouton bouton-contour" onClick={() => props.ouvrir('spec')}>
-            Lire la spec
+          <p className="texte">
+            Spec version {ticket.specVersion}, design version {ticket.designVersion}, à relire avant le développement.
+          </p>
+          <button type="button" className="bouton bouton-contour" onClick={() => props.ouvrir('design')}>
+            Voir le design
           </button>
           <button type="button" className="bouton bouton-ambre" disabled={occupe || !actions.includes('LANCER_DEV')} onClick={props.lancerDev}>
             Lancer le dev

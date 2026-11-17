@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { actionsDisponibles, transition } from '../../src/domaine/machine-etats';
 import { indexColonne, nomBranche } from '../../src/domaine/colonnes';
 import { ACTEURS, COLONNES, TYPES_EVENEMENT, type Acteur, type Colonne, type TypeEvenement } from '../../src/domaine/types';
-import { CTX, EVENEMENTS, MAINTENANT, SCENARIOS, TOUT_VERT, ticket, ticketFavorable } from './fixtures';
+import { CTX, EVENEMENTS, MAINTENANT, SCENARIOS, TOUT_VERT, URL_MAQUETTE, ticket, ticketFavorable } from './fixtures';
 
 /**
  * Table de vérité écrite à la main, indépendante du code : pour chaque événement,
@@ -11,6 +11,8 @@ import { CTX, EVENEMENTS, MAINTENANT, SCENARIOS, TOUT_VERT, ticket, ticketFavora
 const AUTORISE: Record<TypeEvenement, { acteur: Acteur; depuis: Colonne[]; vers: 'meme' | Colonne; exigeBlocage?: boolean }> = {
   LANCER_CONCEPTION: { acteur: 'utilisatrice', depuis: ['backlog'], vers: 'conception' },
   SPEC_PRETE: { acteur: 'systeme', depuis: ['conception'], vers: 'meme' },
+  LANCER_DESIGN: { acteur: 'utilisatrice', depuis: ['conception'], vers: 'meme' },
+  DESIGN_PRET: { acteur: 'systeme', depuis: ['conception'], vers: 'meme' },
   LANCER_DEV: { acteur: 'utilisatrice', depuis: ['conception'], vers: 'dev' },
   ITERATION_TERMINEE: { acteur: 'systeme', depuis: ['dev'], vers: 'meme' },
   DEV_TERMINE: { acteur: 'systeme', depuis: ['dev'], vers: 'test' },
@@ -107,16 +109,25 @@ describe('Backlog vers En conception', () => {
     expect(r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'spec' }]);
     expect(r.ticket.modifieLe).toBe(MAINTENANT);
   });
+
+  it('fixe la branche dès la conception, pour y commiter la maquette', () => {
+    const r = transition(ticket(), EVENEMENTS.LANCER_CONCEPTION, 'utilisatrice', CTX);
+    expect(r.ok && r.ticket.branche).toBe('claude/12-fiche-personnage');
+  });
 });
 
 describe('spec prête', () => {
   const enConception = ticket({ colonne: 'conception', runEnCours: 'spec' });
 
-  it('rattache la spec et incrémente sa version', () => {
+  it('rattache la spec, incrémente sa version et enchaîne sur le design', () => {
     const r = transition(enConception, { type: 'SPEC_PRETE', spec: '# Ma spec' }, 'systeme', CTX);
-    expect(r.ok && r.ticket.spec).toBe('# Ma spec');
-    expect(r.ok && r.ticket.specVersion).toBe(1);
-    expect(r.ok && r.ticket.runEnCours).toBe(null);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.ticket.spec).toBe('# Ma spec');
+    expect(r.ticket.specVersion).toBe(1);
+    expect(r.ticket.runEnCours).toBe('design');
+    expect(r.ticket.colonne).toBe('conception');
+    expect(r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'design' }]);
   });
 
   it('refuse une spec vide', () => {
@@ -130,19 +141,96 @@ describe('spec prête', () => {
   });
 });
 
+describe('design prêt', () => {
+  const enDesign = ticket({ colonne: 'conception', spec: '# v1', specVersion: 1, runEnCours: 'design', branche: 'claude/12-fiche-personnage' });
+
+  it('rattache le résumé et la maquette, puis rend la main', () => {
+    const r = transition(enDesign, { type: 'DESIGN_PRET', resume: '# Design', urlMaquette: URL_MAQUETTE }, 'systeme', CTX);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.ticket.design).toBe('# Design');
+    expect(r.ticket.urlMaquette).toBe(URL_MAQUETTE);
+    expect(r.ticket.designVersion).toBe(1);
+    expect(r.ticket.runEnCours).toBe(null);
+    expect(r.ticket.colonne).toBe('conception');
+    expect(r.effets).toEqual([]);
+    expect(r.journal[0]?.type).toBe('design');
+  });
+
+  it('refuse un résumé vide', () => {
+    const r = transition(enDesign, { type: 'DESIGN_PRET', resume: ' ', urlMaquette: URL_MAQUETTE }, 'systeme', CTX);
+    expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+
+  it('refuse une maquette sans lien web', () => {
+    for (const urlMaquette of ['', 'maquettes/ticket-12.html', 'javascript:alert(1)']) {
+      const r = transition(enDesign, { type: 'DESIGN_PRET', resume: '# Design', urlMaquette }, 'systeme', CTX);
+      expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+    }
+  });
+
+  it('refuse sans design en cours', () => {
+    const r = transition({ ...enDesign, runEnCours: 'spec' }, EVENEMENTS.DESIGN_PRET, 'systeme', CTX);
+    expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+});
+
+describe('lancer le design à la main', () => {
+  const specSeule = ticket({ colonne: 'conception', spec: '# v1', specVersion: 1 });
+
+  it('lance le design d’un ticket qui a une spec sans design', () => {
+    const r = transition(specSeule, EVENEMENTS.LANCER_DESIGN, 'utilisatrice', CTX);
+    expect(r.ok && r.ticket.runEnCours).toBe('design');
+    expect(r.ok && r.ticket.branche).toBe('claude/12-fiche-personnage');
+    expect(r.ok && r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'design' }]);
+  });
+
+  it('refuse sans spec', () => {
+    const r = transition({ ...specSeule, spec: null }, EVENEMENTS.LANCER_DESIGN, 'utilisatrice', CTX);
+    expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+
+  it('refuse si le design existe déjà', () => {
+    const r = transition({ ...specSeule, design: '# D', urlMaquette: URL_MAQUETTE }, EVENEMENTS.LANCER_DESIGN, 'utilisatrice', CTX);
+    expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+
+  it('refuse pendant un run', () => {
+    const r = transition({ ...specSeule, runEnCours: 'design' }, EVENEMENTS.LANCER_DESIGN, 'utilisatrice', CTX);
+    expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+});
+
 describe('En conception vers En dev', () => {
+  const pret = { colonne: 'conception', spec: '# v1', specVersion: 1, design: '# D', urlMaquette: URL_MAQUETTE, designVersion: 1 } as const;
+
   it('refuse sans spec rattachée', () => {
-    const r = transition(ticket({ colonne: 'conception', spec: null }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
+    const r = transition(ticket({ ...pret, spec: null }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
+    expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+
+  it('refuse sans design rattaché', () => {
+    const r = transition(ticket({ ...pret, design: null, urlMaquette: null }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
     expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
   });
 
   it('refuse pendant la rédaction de la spec', () => {
-    const r = transition(ticket({ colonne: 'conception', spec: '# v1', runEnCours: 'spec' }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
+    const r = transition(ticket({ ...pret, runEnCours: 'spec' }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
     expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
   });
 
+  it('refuse pendant le design', () => {
+    const r = transition(ticket({ ...pret, runEnCours: 'design' }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
+    expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+
+  it('garde la branche fixée en conception', () => {
+    const r = transition(ticket({ ...pret, branche: 'claude/12-ancien-titre' }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
+    expect(r.ok && r.ticket.branche).toBe('claude/12-ancien-titre');
+  });
+
   it('crée une branche au nom prévisible et lance la boucle de dev', () => {
-    const r = transition(ticket({ colonne: 'conception', spec: '# v1', specVersion: 1 }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
+    const r = transition(ticket(pret), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.ticket.branche).toBe('claude/12-fiche-personnage');
@@ -324,9 +412,18 @@ describe('blocages et relance', () => {
     expect(r.journal.some((j) => j.type === 'deblocage')).toBe(true);
   });
 
-  it('la relance en conception relance la rédaction de la spec', () => {
-    const r = transition(ticketFavorable('conception', 'RELANCER', true), EVENEMENTS.RELANCER, 'utilisatrice', CTX);
+  it('la relance en conception relance la rédaction de la spec quand elle manque', () => {
+    const bloque = { ...ticketFavorable('conception', 'RELANCER', true), spec: null, design: null, urlMaquette: null };
+    const r = transition(bloque, EVENEMENTS.RELANCER, 'utilisatrice', CTX);
     expect(r.ok && r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'spec' }]);
+    expect(r.ok && r.ticket.runEnCours).toBe('spec');
+  });
+
+  it('la relance en conception relance seulement le design quand la spec existe', () => {
+    const bloque = { ...ticketFavorable('conception', 'RELANCER', true), design: null, urlMaquette: null };
+    const r = transition(bloque, EVENEMENTS.RELANCER, 'utilisatrice', CTX);
+    expect(r.ok && r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'design' }]);
+    expect(r.ok && r.ticket.spec).toBe('# Spec');
   });
 
   it('la relance en déploiement relance le pipeline', () => {
@@ -343,6 +440,18 @@ describe('actions disponibles pour l’interface', () => {
 
   it('ne propose pas Lancer le dev sans spec', () => {
     expect(actionsDisponibles(ticket({ colonne: 'conception', runEnCours: 'spec' }))).toEqual([]);
+  });
+
+  it('ne propose rien pendant le design', () => {
+    expect(actionsDisponibles(ticket({ colonne: 'conception', spec: '# v1', runEnCours: 'design' }))).toEqual([]);
+  });
+
+  it('propose Lancer le design quand seule la spec existe', () => {
+    expect(actionsDisponibles(ticket({ colonne: 'conception', spec: '# v1' }))).toEqual(['LANCER_DESIGN']);
+  });
+
+  it('propose Lancer le dev quand spec et design sont prêts', () => {
+    expect(actionsDisponibles(ticket({ colonne: 'conception', spec: '# v1', design: '# D', urlMaquette: URL_MAQUETTE }))).toEqual(['LANCER_DEV']);
   });
 
   it('propose Déployer en prod en test', () => {

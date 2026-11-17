@@ -17,6 +17,9 @@ export function ticket(partiel: Partial<Ticket> = {}): Ticket {
     runEnCours: null,
     spec: null,
     specVersion: 0,
+    design: null,
+    urlMaquette: null,
+    designVersion: 0,
     branche: null,
     iteration: 0,
     iterationMax: 5,
@@ -37,10 +40,14 @@ export const SCENARIOS = [
   { objectif: 'Cas d’erreur', etapes: 'Saisir un nom vide', resultatAttendu: 'Un message d’erreur apparaît' },
 ];
 
+export const URL_MAQUETTE = 'https://github.com/orphane-a/optivie/blob/claude/12-fiche-personnage/maquettes/ticket-12.html';
+
 /** Un événement valide de chaque type, avec une charge utile correcte. */
 export const EVENEMENTS: Record<TypeEvenement, Evenement> = {
   LANCER_CONCEPTION: { type: 'LANCER_CONCEPTION' },
   SPEC_PRETE: { type: 'SPEC_PRETE', spec: '# Spec\n\nExigences.' },
+  LANCER_DESIGN: { type: 'LANCER_DESIGN' },
+  DESIGN_PRET: { type: 'DESIGN_PRET', resume: '# Design\n\nÉcrans.', urlMaquette: URL_MAQUETTE },
   LANCER_DEV: { type: 'LANCER_DEV' },
   ITERATION_TERMINEE: { type: 'ITERATION_TERMINEE', iteration: 1, controles: { unitaires: 'vert', non_regression: 'en_cours', exploratoire: 'en_attente' } },
   DEV_TERMINE: { type: 'DEV_TERMINE', urlPreprod: 'https://preprod.exemple.fr', controles: TOUT_VERT, scenarios: SCENARIOS },
@@ -57,12 +64,25 @@ export const EVENEMENTS: Record<TypeEvenement, Evenement> = {
  * La matrice ne teste donc que la colonne, l'acteur et le blocage.
  */
 export function ticketFavorable(colonne: Ticket['colonne'], type: TypeEvenement, bloque: boolean): Ticket {
-  const base: Partial<Ticket> = { colonne, spec: '# Spec', specVersion: 1, branche: 'claude/12-fiche-personnage' };
+  const base: Partial<Ticket> = {
+    colonne,
+    spec: '# Spec',
+    specVersion: 1,
+    design: '# Design',
+    urlMaquette: URL_MAQUETTE,
+    designVersion: 1,
+    branche: 'claude/12-fiche-personnage',
+  };
+  const sansDesign = { design: null, urlMaquette: null, designVersion: 0 };
   switch (type) {
     case 'SPEC_PRETE':
-      base.runEnCours = 'spec';
-      base.spec = null;
-      base.specVersion = 0;
+      Object.assign(base, sansDesign, { runEnCours: 'spec', spec: null, specVersion: 0 });
+      break;
+    case 'LANCER_DESIGN':
+      Object.assign(base, sansDesign, { runEnCours: null });
+      break;
+    case 'DESIGN_PRET':
+      Object.assign(base, sansDesign, { runEnCours: 'design' });
       break;
     case 'ITERATION_TERMINEE':
     case 'DEV_TERMINE':

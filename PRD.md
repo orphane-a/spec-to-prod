@@ -233,6 +233,18 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
 - 💾 SQLite passe par le module node:sqlite intégré à Node, car la politique de sécurité Windows bloque les modules natifs comme better-sqlite3.
 - 📥 Reprise des anciens kanbans en artefact (Optivie, Elections 2027 devenu Demandez le programme) : les colonnes En test IA et En test Anne vont toutes deux dans En test, les cartes supprimées ne sont pas reprises, l'historique de chaque carte devient son journal. Le projet AMLF est retiré.
 
+**Décisions prises pour la connexion à Claude** 🔌
+
+- 🎨 Étape design : elle fait partie de En conception. La spec prête lance seule le design, et Lancer le dev exige la spec et le design. Un ticket repris avec une spec mais sans design propose Lancer le design.
+- 🖼️ Livrable du design : une maquette HTML autonome commitée sur la branche du ticket (maquettes/ticket-identifiant.html), plus un résumé markdown dans le ticket.
+- 🌿 La branche est donc fixée dès Lancer la conception, et non plus au lancement du dev.
+- 🧩 Une tâche cloud par étape (spec, design, dev), chacune avec son URL /fire et son jeton dans le fichier .env du serveur. Les prompts sont versionnés dans taches-cloud.
+- ⏳ Réponse 429 de /fire : le ticket passe en Bloqué avec « Quota Claude atteint » et l'heure de reprise tirée de Retry-After. L'endpoint ne distingue pas la limite de lancements du quota d'abonnement.
+- 🔁 Aucune relance automatique d'un appel /fire : l'endpoint n'est pas idempotent, un nouvel essai lancerait une deuxième session.
+- 🔕 Session silencieuse : sans signalement depuis 60 minutes (RUN_SILENCE_MAX_MIN), le ticket passe en Bloqué avec le lien de la session. Cela couvre un quota épuisé en cours de run, que rien d'autre ne signale.
+- 🔐 Les sessions cloud signent leurs webhooks avec le secret partagé, stocké comme variable de l'environnement cloud (SPEC_TO_PROD_SECRET), via le script taches-cloud/signaler.mjs.
+- 🧪 Préprod : en attendant le pipeline de préprod, la session de dev renvoie l'URL de préprod du projet. Le déploiement réel de la branche en préprod est la prochaine tâche, car P0.4 exige une préprod à jour avant En test.
+
 ## 🗓️ Planning et phasage
 
 Aucune date butoir n'a été fournie. Je propose trois phases pour apprendre vite. 🧭

@@ -39,6 +39,42 @@ describe('lecture de la configuration', () => {
 
   it('exige un secret en mode réel', () => {
     expect(() => lireConfig({ CLAUDE_MODE: 'reel' })).toThrow(/WEBHOOK_SECRET/);
-    expect(lireConfig({ CLAUDE_MODE: 'reel', WEBHOOK_SECRET: secret }).WEBHOOK_SECRET).toBe(secret);
+  });
+});
+
+describe('configuration du mode reel', () => {
+  const tache = (e: string) => ({
+    [`ROUTINE_${e}_URL`]: `https://api.anthropic.com/v1/claude_code/routines/trig_01${e}/fire`,
+    [`ROUTINE_${e}_JETON`]: `sk-ant-oat01-${e.toLowerCase()}-jeton-de-test`,
+  });
+  const complet = {
+    CLAUDE_MODE: 'reel',
+    WEBHOOK_SECRET: secret,
+    RELAIS_URL_PUBLIQUE: 'https://kanban.orphane.fr',
+    ...tache('SPEC'),
+    ...tache('DESIGN'),
+    ...tache('DEV'),
+  };
+
+  it('accepte une configuration complète', () => {
+    const config = lireConfig(complet);
+    expect(config.CLAUDE_MODE).toBe('reel');
+    expect(config.RUN_SILENCE_MAX_MIN).toBe(60);
+  });
+
+  it.each(Object.keys(complet).filter((k) => k !== 'CLAUDE_MODE'))('refuse de démarrer sans %s', (nom) => {
+    expect(() => lireConfig({ ...complet, [nom]: '' })).toThrow(nom);
+  });
+
+  it('refuse une URL de tâche qui ne vise pas /fire', () => {
+    expect(() => lireConfig({ ...complet, ROUTINE_DEV_URL: 'https://exemple.fr/fire' })).toThrow('ROUTINE_DEV_URL');
+  });
+
+  it('refuse un relais en http', () => {
+    expect(() => lireConfig({ ...complet, RELAIS_URL_PUBLIQUE: 'http://kanban.orphane.fr' })).toThrow('RELAIS_URL_PUBLIQUE');
+  });
+
+  it('le mode simulé n’exige aucune tâche cloud', () => {
+    expect(() => lireConfig({})).not.toThrow();
   });
 });

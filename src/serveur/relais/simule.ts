@@ -9,6 +9,7 @@ import { SOURCES } from './webhooks';
  * Mots clés reconnus dans la description d'un ticket, valables une seule fois
  * pour que le bouton Relancer montre la reprise :
  *   #simu:echec-spec          la rédaction de spec échoue
+ *   #simu:echec-design        la conception de la maquette échoue
  *   #simu:iterations          la boucle de dev atteint le maximum d'itérations
  *   #simu:quota               le lancement est refusé pour quota atteint
  *   #simu:echec-deploiement   le déploiement échoue à l'envoi sur le serveur
@@ -24,7 +25,7 @@ export interface OptionsSimulation {
 
 type Etape = { apres: number; corps: Evenement; quota?: number };
 
-type MotCle = 'echec-spec' | 'iterations' | 'quota' | 'echec-deploiement';
+type MotCle = 'echec-spec' | 'echec-design' | 'iterations' | 'quota' | 'echec-deploiement';
 
 export class Simulation {
   private readonly minuteries = new Set<NodeJS.Timeout>();
@@ -38,7 +39,7 @@ export class Simulation {
       if (this.consommer(ticket, 'quota')) {
         throw new QuotaAtteintErreur(new Date(Date.now() + 2 * 3600_000).toISOString());
       }
-      const etapes = run.type === 'spec' ? this.etapesSpec(ticket) : this.etapesDev(ticket);
+      const etapes = run.type === 'spec' ? this.etapesSpec(ticket) : run.type === 'design' ? this.etapesDesign(ticket) : this.etapesDev(ticket);
       this.programmer(SOURCES.claude.chemin, run.id, etapes);
       return { urlSession: `simulation:${run.id.slice(0, 8)}` };
     },
@@ -90,6 +91,21 @@ export class Simulation {
       return [{ apres: d, corps: { type: 'ECHEC', motif: 'La rédaction de la spec a échoué (simulation).' } }];
     }
     return [{ apres: d, corps: { type: 'SPEC_PRETE', spec: specSimulee(ticket) }, quota: this.quotaSuivant(2) }];
+  }
+
+  private etapesDesign(ticket: Ticket): Etape[] {
+    const d = this.options.delaiMs;
+    if (this.consommer(ticket, 'echec-design')) {
+      return [{ apres: d, corps: { type: 'ECHEC', motif: 'La conception de la maquette a échoué (simulation).' } }];
+    }
+    const branche = (ticket.branche ?? `claude/${ticket.id}`).replace('claude/', '');
+    return [
+      {
+        apres: d,
+        corps: { type: 'DESIGN_PRET', resume: designSimule(ticket), urlMaquette: `https://maquette.exemple.test/${branche}/ticket-${ticket.id}.html` },
+        quota: this.quotaSuivant(2),
+      },
+    ];
   }
 
   private etapesDev(ticket: Ticket): Etape[] {
@@ -162,6 +178,24 @@ function specSimulee(ticket: Ticket): string {
     '',
     '- Étant donné une saisie valide, quand je valide, alors le résultat s’affiche.',
     '- Étant donné une saisie vide, quand je valide, alors un message explique quoi corriger.',
+  ].join('\n');
+}
+
+function designSimule(ticket: Ticket): string {
+  return [
+    `# Design : ${ticket.titre}`,
+    '',
+    '_Maquette conçue par le faux Claude du mode simulé._',
+    '',
+    '## Écrans',
+    '',
+    '1. Écran principal avec le formulaire et le résultat.',
+    '2. État d’erreur avec un message sous le champ concerné.',
+    '',
+    '## Textes',
+    '',
+    '- Bouton principal : Valider',
+    '- Message d’erreur : Ce champ est obligatoire.',
   ].join('\n');
 }
 
