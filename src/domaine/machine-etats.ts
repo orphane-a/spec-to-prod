@@ -155,7 +155,6 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
     case 'LANCER_DEV': {
       if (!ticket.spec?.trim()) return condition('Lancer le dev demande une spec rattachée au ticket.');
       if (ticket.runEnCours) return condition('Attendez la fin de la conception.');
-      if (!designPret(ticket)) return condition('Lancer le dev demande un design rattaché au ticket.');
       const branche = ticket.branche ?? nomBranche(ticket.id, ticket.titre);
       return succes(
         { ...t, colonne: 'dev', runEnCours: 'dev', branche, iteration: 0, controles: { ...CONTROLES_INITIAUX } },

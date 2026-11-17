@@ -235,7 +235,7 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
 
 **Décisions prises pour la connexion à Claude** 🔌
 
-- 🎨 Étape design : elle fait partie de En conception. La spec prête lance seule le design, et Lancer le dev exige la spec et le design. Un ticket repris avec une spec mais sans design propose Lancer le design.
+- 🎨 Étape design : elle fait partie de En conception. La spec prête lance seule le design, mais il est facultatif : Lancer le dev exige seulement la spec. Un ticket avec une spec mais sans design propose Lancer le design et Lancer le dev.
 - 🖼️ Livrable du design : une maquette HTML autonome commitée sur la branche du ticket (maquettes/ticket-identifiant.html), plus un résumé markdown dans le ticket.
 - 🌿 La branche est donc fixée dès Lancer la conception, et non plus au lancement du dev.
 - 🧩 Une tâche cloud par étape (spec, design, dev), chacune avec son URL /fire et son jeton dans le fichier .env du serveur. Les prompts sont versionnés dans taches-cloud.

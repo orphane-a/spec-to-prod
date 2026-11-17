@@ -210,9 +210,10 @@ describe('En conception vers En dev', () => {
     expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
   });
 
-  it('refuse sans design rattaché', () => {
-    const r = transition(ticket({ ...pret, design: null, urlMaquette: null }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
-    expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  it('accepte sans design : le design est facultatif', () => {
+    const r = transition(ticket({ ...pret, design: null, urlMaquette: null, designVersion: 0 }), EVENEMENTS.LANCER_DEV, 'utilisatrice', CTX);
+    expect(r.ok && r.ticket.colonne).toBe('dev');
+    expect(r.ok && r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'dev' }]);
   });
 
   it('refuse pendant la rédaction de la spec', () => {
@@ -527,8 +528,8 @@ describe('actions disponibles pour l’interface', () => {
     expect(actionsDisponibles(ticket({ colonne: 'conception', spec: '# v1', runEnCours: 'design' }))).toEqual([]);
   });
 
-  it('propose Lancer le design quand seule la spec existe', () => {
-    expect(actionsDisponibles(ticket({ colonne: 'conception', spec: '# v1' }))).toEqual(['LANCER_DESIGN']);
+  it('propose Lancer le design et Lancer le dev quand seule la spec existe', () => {
+    expect(actionsDisponibles(ticket({ colonne: 'conception', spec: '# v1' }))).toEqual(['LANCER_DESIGN', 'LANCER_DEV']);
   });
 
   it('propose Lancer le dev quand spec et design sont prêts', () => {

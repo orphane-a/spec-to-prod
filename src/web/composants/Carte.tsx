@@ -126,12 +126,15 @@ function Corps(props: Props) {
               <IconeCoche />
               Spec prête
             </p>
-            <p className="texte">Il manque la maquette avant le développement.</p>
+            <p className="texte">Pas de maquette pour ce ticket. Le design est facultatif.</p>
             <button type="button" className="bouton bouton-contour" onClick={() => props.ouvrir('spec')}>
               Lire la spec
             </button>
-            <button type="button" className="bouton bouton-ambre" disabled={occupe || !actions.includes('LANCER_DESIGN')} onClick={props.lancerDesign}>
+            <button type="button" className="bouton bouton-contour" disabled={occupe || !actions.includes('LANCER_DESIGN')} onClick={props.lancerDesign}>
               Lancer le design
+            </button>
+            <button type="button" className="bouton bouton-ambre" disabled={occupe || !actions.includes('LANCER_DEV')} onClick={props.lancerDev}>
+              Lancer le dev
             </button>
           </>
         );
