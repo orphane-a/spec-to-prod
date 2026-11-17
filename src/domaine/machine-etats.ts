@@ -32,6 +32,7 @@ const REGLES: Record<TypeEvenement, Regle> = {
   LANCER_DEV: { acteur: 'utilisatrice', depuis: ['conception'] },
   ITERATION_TERMINEE: { acteur: 'systeme', depuis: ['dev'] },
   DEV_TERMINE: { acteur: 'systeme', depuis: ['dev'] },
+  PREPROD_DEPLOYEE: { acteur: 'systeme', depuis: ['dev'] },
   DEPLOYER_PROD: { acteur: 'utilisatrice', depuis: ['test'] },
   ETAPE_DEPLOIEMENT: { acteur: 'systeme', depuis: ['deploiement'] },
   DEPLOIEMENT_TERMINE: { acteur: 'systeme', depuis: ['deploiement'] },
@@ -44,9 +45,15 @@ const REGLES: Record<TypeEvenement, Regle> = {
 /** Run à relancer dans chaque colonne. En conception, seule l'étape qui manque repart. */
 const RUN_A_RELANCER: Partial<Record<Colonne, (ticket: Ticket) => TypeRun>> = {
   conception: (ticket) => (ticket.spec?.trim() ? 'design' : 'spec'),
-  dev: () => 'dev',
+  // Dev déjà au vert avec ses scénarios : seule la préprod repart.
+  dev: (ticket) => (ticket.scenarios.length >= SCENARIOS_MINIMUM && toutEstVert(ticket.controles) ? 'preprod' : 'dev'),
   deploiement: () => 'deploiement',
 };
+
+/** Runs qui consomment le quota Claude. Les déploiements passent par GitHub Actions. */
+const RUNS_CLAUDE: readonly TypeRun[] = ['spec', 'design', 'dev'];
+
+const motifPreprodOccupee = (ticketId: number) => `Préprod occupée par le ticket ${ticketId}.`;
 
 const designPret = (ticket: Ticket) => Boolean(ticket.design?.trim() && ticket.urlMaquette);
 const estLienWeb = (url: string) => /^https?:\/\/\S+$/i.test(url.trim());
@@ -180,20 +187,35 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
 
     case 'DEV_TERMINE': {
       if (ticket.runEnCours !== 'dev') return condition('Aucune boucle de dev en cours.');
-      if (!evenement.urlPreprod.trim()) return condition('La préprod doit être déployée avant le passage en test.');
       if (!toutEstVert(evenement.controles)) return condition('Tous les contrôles doivent être au vert avant le passage en test.');
       if (evenement.scenarios.length < SCENARIOS_MINIMUM) {
         return condition('Il faut au moins deux scénarios de test : le cas nominal et un cas d’erreur.');
       }
       const scenarios = evenement.scenarios.map((s, i) => ({ ...s, id: i + 1, fait: false }));
-      return succes(
-        { ...t, colonne: 'test', runEnCours: null, urlPreprod: evenement.urlPreprod, controles: evenement.controles, scenarios },
-        [
-          { type: 'test', detail: resumeControles(evenement.controles) },
-          passage('dev', 'test'),
-          { type: 'action', detail: `${scenarios.length} scénarios de test écrits. Préprod : ${evenement.urlPreprod}` },
-        ],
-      );
+      const termine: Ticket = { ...t, controles: evenement.controles, scenarios };
+      const journal: EntreeJournal[] = [
+        { type: 'test', detail: resumeControles(evenement.controles) },
+        { type: 'action', detail: `Dev terminé, ${scenarios.length} scénarios de test écrits.` },
+      ];
+      if (ctx.preprodOccupeePar) {
+        const motif = motifPreprodOccupee(ctx.preprodOccupeePar);
+        return succes({ ...termine, runEnCours: null, blocage: { motif, cause: 'echec', le: ctx.maintenant, repriseEstimee: null } }, [
+          ...journal,
+          { type: 'blocage', detail: `Bloqué : ${motif}` },
+        ]);
+      }
+      return succes({ ...termine, runEnCours: 'preprod' }, [...journal, { type: 'deploiement', detail: 'Déploiement en préprod lancé.' }], [demarrer('preprod')]);
+    }
+
+    case 'PREPROD_DEPLOYEE': {
+      if (ticket.runEnCours !== 'preprod') return condition('Aucun déploiement en préprod en cours.');
+      if (!estLienWeb(evenement.urlPreprod)) return condition('La préprod doit être un lien web.');
+      if (!evenement.version.trim()) return condition('La version déployée en préprod est obligatoire.');
+      const url = evenement.urlPreprod.trim();
+      return succes({ ...t, colonne: 'test', runEnCours: null, urlPreprod: url }, [
+        { type: 'deploiement', detail: `Préprod à jour, version ${evenement.version.trim()} : ${url}` },
+        passage('dev', 'test'),
+      ]);
     }
 
     case 'DEPLOYER_PROD':
@@ -235,6 +257,7 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
 
     case 'QUOTA_ATTEINT':
       if (!ticket.runEnCours) return condition('Aucun run en cours.');
+      if (!RUNS_CLAUDE.includes(ticket.runEnCours)) return condition('Ce déploiement ne consomme pas de quota Claude.');
       return succes(
         {
           ...t,
@@ -248,6 +271,7 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
       if (!ticket.blocage) return condition('Seul un ticket bloqué peut être relancé.');
       const run = RUN_A_RELANCER[ticket.colonne]?.(ticket);
       if (!run) return refus('TRANSITION_INTERDITE', 'Rien à relancer dans cette colonne.');
+      if (run === 'preprod' && ctx.preprodOccupeePar) return condition(motifPreprodOccupee(ctx.preprodOccupeePar));
       const relance: Ticket = { ...t, blocage: null, runEnCours: run };
       if (run === 'dev') Object.assign(relance, { iteration: 0, controles: { ...CONTROLES_INITIAUX } });
       if (run === 'deploiement') relance.etapesDeploiement = { ...ETAPES_INITIALES };
