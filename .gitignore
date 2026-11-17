@@ -4,7 +4,11 @@ dist/
 .env.*
 !.env.example
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
+donnees/
 coverage/
 playwright-report/
 test-results/
