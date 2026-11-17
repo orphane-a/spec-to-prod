@@ -354,6 +354,46 @@ button:disabled {
   min-height: 500px;
 }
 
+/* Glisser-déposer */
+.carte-deplacable.actif {
+  cursor: grab;
+}
+
+.carte-deplacable.glissee {
+  opacity: 0.45;
+}
+
+.colonne-corps {
+  transition: background-color 120ms ease, outline-color 120ms ease;
+  outline: 2px dashed transparent;
+  outline-offset: -2px;
+}
+
+.colonne-corps.depot-possible {
+  outline-color: var(--ambre);
+}
+
+.colonne-corps.depot-survol {
+  background: #fdf3dc;
+  outline-style: solid;
+}
+
+.colonne-corps.depot-refuse {
+  background: var(--rouge-fond);
+  outline-color: var(--rouge-bordure);
+}
+
+.depot-message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--blanc);
+  color: var(--rouge-texte);
+  border: 1px solid var(--rouge-bordure);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .colonne-vide {
   margin: 0;
   padding: 16px 8px;

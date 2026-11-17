@@ -80,6 +80,39 @@ test('quota atteint : bandeau, ticket bloqué, reprise seulement par Relancer', 
   await expect(page.getByText('Quota Claude épuisé.')).toBeHidden();
 });
 
+test('glisser une carte déclenche les décisions manuelles, et seulement elles', async ({ page }) => {
+  await page.goto('/');
+  const titre = 'Carte à glisser';
+  const carte = await ajouterTicket(page, titre, 'Pour le glisser-déposer');
+
+  // Saut de colonne : le message s'affiche au survol, la carte reste en place.
+  await carte.hover();
+  await page.mouse.down();
+  await colonne(page, 'En dev').hover();
+  await colonne(page, 'En dev').hover({ position: { x: 40, y: 400 } });
+  await expect(colonne(page, 'En dev').getByRole('status')).toHaveText('Un ticket ne saute pas de colonne : il avance une étape à la fois.');
+  await page.mouse.up();
+  await expect(colonne(page, 'Backlog').getByRole('article', { name: titre })).toBeVisible();
+  await expect(colonne(page, 'En dev').getByRole('status')).toHaveCount(0);
+
+  // Backlog vers En conception : la conception démarre.
+  await carte.dragTo(colonne(page, 'En conception'));
+  const enConception = colonne(page, 'En conception').getByRole('article', { name: titre });
+  await expect(enConception.getByText('Spec prête')).toBeVisible();
+
+  // En conception vers En dev : le dev démarre.
+  await enConception.dragTo(colonne(page, 'En dev'));
+  const enTest = colonne(page, 'En test').getByRole('article', { name: titre });
+  await expect(enTest.getByText('Préprod à jour')).toBeVisible({ timeout: 15_000 });
+
+  // En test vers Déploiement en prod : la confirmation est obligatoire.
+  await enTest.dragTo(colonne(page, 'Déploiement en prod'));
+  const confirmation = page.getByRole('dialog', { name: 'Déployer en prod ?' });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole('button', { name: 'Annuler' }).click();
+  await expect(enTest).toBeVisible();
+});
+
 test('le backlog se modifie et se supprime, pas les autres colonnes', async ({ page }) => {
   await page.goto('/');
   const carte = await ajouterTicket(page, 'Idée à jeter', 'Brouillon');
