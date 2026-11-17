@@ -155,6 +155,22 @@ function Corps(props: Props) {
       );
 
     case 'dev':
+      if (ticket.runEnCours === 'preprod') {
+        return (
+          <>
+            {ticket.branche && <p className="branche">Branche {ticket.branche}</p>}
+            <p className="statut valide">
+              <IconeCoche />
+              Dev terminé, tests au vert
+            </p>
+            <p className="statut en-cours">
+              <IconeRotation />
+              Déploiement en préprod
+            </p>
+            <p className="texte-petit">{pluriel(ticket.scenarios.length, 'scénario')} prêts pour vos tests.</p>
+          </>
+        );
+      }
       return (
         <>
           {ticket.branche && <p className="branche">Branche {ticket.branche}</p>}
