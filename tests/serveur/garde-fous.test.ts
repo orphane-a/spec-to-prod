@@ -51,6 +51,7 @@ describe('configuration du mode reel', () => {
     CLAUDE_MODE: 'reel',
     WEBHOOK_SECRET: secret,
     RELAIS_URL_PUBLIQUE: 'https://kanban.orphane.fr',
+    GITHUB_JETON: 'github_pat_jeton_de_test_assez_long',
     ...tache('SPEC'),
     ...tache('DESIGN'),
     ...tache('DEV'),

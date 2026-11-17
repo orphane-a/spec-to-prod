@@ -82,7 +82,7 @@ describe('actions de l’utilisatrice', () => {
     expect(app.claude.demandes).toHaveLength(1);
     expect(app.claude.dernierRun()).toMatchObject({ type: 'spec', statut: 'en_cours', ticketId: id });
     const journal = (await app.serveur.inject(`/api/tickets/${id}/journal`)).json();
-    expect(journal.map((j: { detail: string }) => j.detail)).toContain('Session démarrée : https://claude.ai/code/session-test');
+    expect(journal.map((j: { detail: string }) => j.detail)).toContain('Session Claude démarrée : https://claude.ai/code/session-test');
   });
 
   it('refuse Lancer le dev sans spec, en 409 avec le code de la machine', async () => {

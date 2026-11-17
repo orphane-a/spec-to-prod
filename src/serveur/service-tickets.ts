@@ -148,7 +148,8 @@ export class ServiceTickets {
       const reponse = await executeur.lancer({ run, ticket, projet });
       if (reponse.urlSession) {
         this.depots.runs.definirSession(run.id, reponse.urlSession);
-        this.depots.tickets.journaliser(ticket.id, [{ type: 'action', detail: `Session démarrée : ${reponse.urlSession}` }], maintenant);
+        const suivi = executeur === this.executeurs.claude ? `Session Claude démarrée : ${reponse.urlSession}` : `Pipeline lancé, suivi sur ${reponse.urlSession}`;
+        this.depots.tickets.journaliser(ticket.id, [{ type: 'action', detail: suivi }], maintenant);
       }
       return this.lire(ticket.id);
     } catch (erreur) {

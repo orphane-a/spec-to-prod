@@ -19,6 +19,8 @@ const schema = z
     /** Minutes sans nouvelles d'un run avant de bloquer le ticket. */
     RUN_SILENCE_MAX_MIN: z.coerce.number().int().min(5).max(24 * 60).default(60),
     RELAIS_URL_PUBLIQUE: z.url({ protocol: /^https$/, error: 'RELAIS_URL_PUBLIQUE doit être une adresse https' }).optional(),
+    /** Jeton GitHub à droits fins : Actions en écriture sur les dépôts des projets, rien d'autre. */
+    GITHUB_JETON: z.string().min(20, 'jeton trop court').optional(),
     ROUTINE_SPEC_URL: urlTache,
     ROUTINE_SPEC_JETON: jetonTache,
     ROUTINE_DESIGN_URL: urlTache,
@@ -31,6 +33,7 @@ const schema = z
     const obligatoires = [
       'WEBHOOK_SECRET',
       'RELAIS_URL_PUBLIQUE',
+      'GITHUB_JETON',
       ...ETAPES.flatMap((e) => [`ROUTINE_${e}_URL`, `ROUTINE_${e}_JETON`] as const),
     ] as const;
     for (const nom of obligatoires) {
