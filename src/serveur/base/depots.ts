@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { CONTROLES_INITIAUX, ETAPES_INITIALES } from '../../domaine/colonnes';
 import type { CauseBlocage, Colonne, EntreeJournal, EvenementJournal, Ticket, TypeRun } from '../../domaine/types';
+import type { TicketImporte } from '../import/kanban-artefact';
 import { enTransaction, type Base } from './connexion';
 
 type Ligne = Record<string, string | number | null>;
@@ -105,6 +106,47 @@ export class DepotTickets {
       )
       .run(saisie.titre, saisie.description, saisie.projetId, this.iterationMax, JSON.stringify(CONTROLES_INITIAUX), JSON.stringify(ETAPES_INITIALES), maintenant, maintenant);
     return this.lire(Number(lastInsertRowid))!;
+  }
+
+  /** Reprend un ticket venu d'un ancien kanban, avec son état et son journal d'origine. */
+  importer(projetId: number, t: TicketImporte): Ticket {
+    return enTransaction(this.base, () => {
+      const { lastInsertRowid } = this.base
+        .prepare(
+          `INSERT INTO tickets (titre, description, projet_id, colonne, spec_markdown, spec_version, branche, iteration, iteration_max,
+             controles_dev, etapes_deploiement, url_preprod, deploye_le, cree_le, modifie_le)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          t.titre,
+          t.description,
+          projetId,
+          t.colonne,
+          t.spec,
+          t.spec ? 1 : 0,
+          t.branche,
+          t.iteration,
+          Math.max(this.iterationMax, t.iteration),
+          JSON.stringify(t.controles),
+          JSON.stringify(t.etapesDeploiement),
+          t.urlPreprod,
+          t.deployeLe,
+          t.creeLe,
+          t.modifieLe,
+        );
+      const id = Number(lastInsertRowid);
+      const scenario = this.base.prepare(
+        'INSERT INTO scenarios (ticket_id, ordre, objectif, etapes, resultat_attendu, fait) VALUES (?, ?, ?, ?, ?, ?)',
+      );
+      t.scenarios.forEach((s, i) => scenario.run(id, i + 1, s.objectif, s.etapes, s.resultatAttendu, t.colonne === 'done' ? 1 : 0));
+      const journal = this.base.prepare('INSERT INTO journal (ticket_id, date, type, detail) VALUES (?, ?, ?, ?)');
+      for (const e of t.journal) journal.run(id, e.date, e.type, e.detail);
+      return this.lire(id)!;
+    });
+  }
+
+  existeDansProjet(projetId: number, titre: string): boolean {
+    return this.base.prepare('SELECT 1 FROM tickets WHERE projet_id = ? AND titre = ?').get(projetId, titre) !== undefined;
   }
 
   modifier(id: number, saisie: SaisieTicket, maintenant: string): Ticket | null {
@@ -243,6 +285,10 @@ export class DepotProjets {
 
   existe(id: number): boolean {
     return this.base.prepare('SELECT 1 FROM projets WHERE id = ?').get(id) !== undefined;
+  }
+
+  parNom(nom: string): Projet | null {
+    return this.lister().find((p) => p.nom === nom) ?? null;
   }
 }
 

@@ -15,7 +15,7 @@ afterEach(async () => {
 describe('projets et quota', () => {
   it('liste les projets de départ', async () => {
     const r = await app.serveur.inject('/api/projets');
-    expect(r.json().map((p: { nom: string }) => p.nom)).toEqual(['AMLF', 'Interface JDR']);
+    expect(r.json().map((p: { nom: string }) => p.nom)).toEqual(['Demandez le programme', 'Interface JDR', 'Optivie']);
   });
 
   it('renvoie le quota initial', async () => {
@@ -158,7 +158,7 @@ describe('parcours complet jusqu’en Done', () => {
     const runDev = app.claude.dernierRun();
 
     await app.service.recevoir(runDev.id, { type: 'ITERATION_TERMINEE', iteration: 1, controles: { ...TOUT_VERT, exploratoire: 'rouge' } });
-    r = await app.service.recevoir(runDev.id, { type: 'DEV_TERMINE', urlPreprod: 'https://preprod.amlf.fr', controles: TOUT_VERT, scenarios: SCENARIOS });
+    r = await app.service.recevoir(runDev.id, { type: 'DEV_TERMINE', urlPreprod: 'https://preprod.optivie.orphane.fr', controles: TOUT_VERT, scenarios: SCENARIOS });
     expect(r).toMatchObject({ ignore: false, ticket: { colonne: 'test', iteration: 1 } });
 
     const coche = await app.serveur.inject({ method: 'PATCH', url: `/api/tickets/${id}/scenarios/1`, payload: { fait: true } });

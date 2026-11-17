@@ -7,7 +7,7 @@ async function ajouterTicket(page: Page, titre: string, description: string) {
   const fenetre = page.getByRole('dialog', { name: 'Ajouter un ticket au backlog' });
   await fenetre.getByLabel('Titre').fill(titre);
   await fenetre.getByLabel('Description').fill(description);
-  await fenetre.getByLabel('Projet').selectOption({ label: 'AMLF' });
+  await fenetre.getByLabel('Projet').selectOption({ label: 'Optivie' });
   await fenetre.getByRole('button', { name: 'Ajouter au backlog' }).click();
   await expect(fenetre).toBeHidden();
   return colonne(page, 'Backlog').getByRole('article', { name: titre });
@@ -54,7 +54,7 @@ test('un ticket va du backlog à Done avec trois décisions et une confirmation'
   await confirmation.getByRole('button', { name: 'Oui, déployer en prod' }).click();
 
   const done = colonne(page, 'Done').getByRole('article', { name: titre });
-  await expect(done.getByText(/AMLF, en ligne le \d+ \S+/)).toBeVisible({ timeout: 15_000 });
+  await expect(done.getByText(/Optivie, en ligne le \d+ \S+/)).toBeVisible({ timeout: 15_000 });
 
   await done.getByRole('button', { name: titre }).click();
   await fiche.getByRole('tab', { name: 'Journal' }).click();

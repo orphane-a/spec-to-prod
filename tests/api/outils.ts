@@ -40,7 +40,7 @@ export async function creerTicket(app: AppTest, saisie: Record<string, unknown> 
   const r = await app.serveur.inject({
     method: 'POST',
     url: '/api/tickets',
-    payload: { titre: 'Planning des bénévoles', description: 'Voir qui est disponible.', projetId: 1, ...saisie },
+    payload: { titre: 'Planning des bénévoles', description: 'Voir qui est disponible.', projetId: 3, ...saisie },
   });
   return r.json();
 }
