@@ -199,20 +199,38 @@ Sources : [Trigger a routine through the API](https://platform.claude.com/docs/e
 
 ## ❓ Questions ouvertes
 
+Chaque question porte un choix par défaut, retenu pour avancer tant que la réponse n'est pas tranchée. 17 novembre 2026.
+
 **Bloquantes** 🛑
 
 - 🏗️ **Technique** : où sont stockés les tickets et sous quelle forme est l'interface (page publiée avec base de données intégrée, application hébergée) ?
+  Par défaut : application hébergée sur le VPS OVH, base SQLite dans un seul fichier, facile à sauvegarder pour une seule utilisatrice.
 - 🔌 **Technique** : comment l'interface déclenche Claude Code et GitHub (piste retenue : tâche cloud à déclencheur API, voir la section Faisabilité) et avec quels droits ?
+  Par défaut : une tâche cloud par étape (spec, dev), chacune avec son jeton /fire gardé côté serveur, et un jeton GitHub à droits fins limité aux dépôts concernés.
 - 🌐 **Technique** : quelles sont les cibles de préprod et de prod pour chaque projet, et comment se fait le déploiement (par exemple SSH sur un serveur) ?
+  Par défaut : chaque projet porte son dépôt, son URL de préprod et son URL de prod ; préprod sur un sous domaine preprod. du même VPS ; déploiement par GitHub Actions et SSH.
 - 🧹 **Produit et technique** : que veut dire « code propre » concrètement (linter sans erreur, couverture minimale, revue par un agent) ?
+  Par défaut : linter et typage sans erreur, tests unitaires et de non régression verts, couverture d'au moins 70 % des lignes, agent exploratoire sans anomalie bloquante.
 
 **Non bloquantes** 🟢
 
-- 🔁 Quel nombre maximum d'itérations avant de passer en Bloqué ?
-- 🌿 La branche est elle fusionnée avant ou après le déploiement en prod ?
-- 📦 Un ticket correspond il toujours à un seul dépôt GitHub ?
-- 🗄️ Comment gérer les migrations de données lors du passage en prod ?
-- 🔑 Où sont stockés les secrets nécessaires au déploiement ?
+- 🔁 Quel nombre maximum d'itérations avant de passer en Bloqué ? Par défaut : 5, réglable par la variable ITERATIONS_MAX.
+- 🌿 La branche est elle fusionnée avant ou après le déploiement en prod ? Par défaut : avant, c'est la première étape du déploiement.
+- 📦 Un ticket correspond il toujours à un seul dépôt GitHub ? Par défaut : oui, le dépôt est porté par le projet du ticket.
+- 🗄️ Comment gérer les migrations de données lors du passage en prod ? Par défaut : le pipeline sauvegarde la base puis joue les migrations avant le redémarrage.
+- 🔑 Où sont stockés les secrets nécessaires au déploiement ? Par défaut : secrets GitHub Actions pour SSH, fichier .env sur le VPS pour le reste, jamais dans le dépôt.
+
+**Décisions prises pendant la phase 1** 🧭
+
+- 📊 Source de la jauge de quota : aucune API ne donne le quota de l'abonnement. Par défaut : valeur transmise par les webhooks des sessions (fictive en mode simulé), et passage en épuisé dès qu'un lancement est refusé pour quota.
+- 🔐 Accès au tableau sur internet : à trancher avant la mise en ligne. Par défaut : un mot de passe unique en variable d'environnement et un cookie de session.
+- 🧠 Échec de rédaction de la spec : le ticket reste en En conception avec le badge Bloqué, sa description intacte.
+- 🌿 Nom de branche : claude/identifiant-titre-court, par exemple claude/12-fiche-personnage.
+- 🖱️ Glisser déposer : absent en v1. Seuls les boutons font avancer un ticket, ce qui rend tout saut de colonne impossible.
+- 🔄 Relance d'un ticket bloqué : un bouton Relancer, toujours manuel ; en dev, la boucle repart avec un compteur d'itérations remis à zéro.
+- 🧪 Scénarios de test : au moins deux (cas nominal et cas d'erreur) pour passer en En test ; ils se cochent seulement pendant la phase de test.
+- ↩️ Retour de En test vers En dev : reporté, il fait partie des exigences P1.
+- 💾 SQLite passe par le module node:sqlite intégré à Node, car la politique de sécurité Windows bloque les modules natifs comme better-sqlite3.
 
 ## 🗓️ Planning et phasage
 
