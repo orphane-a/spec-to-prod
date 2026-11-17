@@ -123,7 +123,8 @@ export class ServiceTickets {
 
   private async appliquer(avant: Ticket, evenement: Evenement, acteur: Acteur, avantEffets?: (apres: Ticket) => void): Promise<Ticket> {
     const maintenant = this.horloge();
-    const resultat = transition(avant, evenement, acteur, { maintenant });
+    const preprodOccupeePar = avant.projetId === null ? null : this.depots.tickets.occupantPreprod(avant.projetId, avant.id);
+    const resultat = transition(avant, evenement, acteur, { maintenant, preprodOccupeePar });
     if (!resultat.ok) throw new ErreurMetier(409, resultat.code, resultat.message);
 
     this.depots.tickets.sauver(resultat.ticket, resultat.journal);
@@ -140,7 +141,8 @@ export class ServiceTickets {
   private async executer(ticket: Ticket, effet: Effet): Promise<Ticket> {
     const maintenant = this.horloge();
     const run = this.depots.runs.ouvrir(ticket.id, effet.run, maintenant);
-    const executeur = effet.run === 'deploiement' ? this.executeurs.deploiement : this.executeurs.claude;
+    // Préprod et prod passent par le pipeline du projet, le reste par une session Claude.
+    const executeur = effet.run === 'preprod' || effet.run === 'deploiement' ? this.executeurs.deploiement : this.executeurs.claude;
     try {
       const projet = ticket.projetId === null ? null : this.depots.projets.lire(ticket.projetId);
       const reponse = await executeur.lancer({ run, ticket, projet });

@@ -12,7 +12,8 @@ import { SOURCES } from './webhooks';
  *   #simu:echec-design        la conception de la maquette échoue
  *   #simu:iterations          la boucle de dev atteint le maximum d'itérations
  *   #simu:quota               le lancement est refusé pour quota atteint
- *   #simu:echec-deploiement   le déploiement échoue à l'envoi sur le serveur
+ *   #simu:echec-preprod       le déploiement en préprod échoue
+ *   #simu:echec-deploiement   le déploiement en prod échoue à l'envoi sur le serveur
  */
 
 export type Envoyer = (chemin: string, corps: object) => Promise<void>;
@@ -25,7 +26,7 @@ export interface OptionsSimulation {
 
 type Etape = { apres: number; corps: Evenement; quota?: number };
 
-type MotCle = 'echec-spec' | 'echec-design' | 'iterations' | 'quota' | 'echec-deploiement';
+type MotCle = 'echec-spec' | 'echec-design' | 'iterations' | 'quota' | 'echec-preprod' | 'echec-deploiement';
 
 export class Simulation {
   private readonly minuteries = new Set<NodeJS.Timeout>();
@@ -47,7 +48,8 @@ export class Simulation {
 
   readonly deploiement: Executeur = {
     lancer: async ({ run, ticket }: DemandeRun): Promise<ReponseLancement> => {
-      this.programmer(SOURCES.pipeline.chemin, run.id, this.etapesDeploiement(ticket));
+      const etapes = run.type === 'preprod' ? this.etapesPreprod(ticket) : this.etapesDeploiement(ticket);
+      this.programmer(SOURCES.pipeline.chemin, run.id, etapes);
       return {};
     },
   };
@@ -123,7 +125,6 @@ export class Simulation {
       { unitaires: 'vert', non_regression: 'vert', exploratoire: 'rouge' },
       { unitaires: 'vert', non_regression: 'vert', exploratoire: 'vert' },
     ];
-    const branche = ticket.branche ?? `claude/${ticket.id}`;
     return [
       ...iterations.map((controles, i) => ({
         apres: d,
@@ -134,12 +135,20 @@ export class Simulation {
         apres: d,
         corps: {
           type: 'DEV_TERMINE',
-          urlPreprod: `https://preprod.exemple.test/${branche.replace('claude/', '')}`,
           controles: iterations.at(-1)!,
           scenarios: scenariosSimules(ticket),
         },
       },
     ];
+  }
+
+  private etapesPreprod(ticket: Ticket): Etape[] {
+    const d = this.options.delaiMs;
+    if (this.consommer(ticket, 'echec-preprod')) {
+      return [{ apres: d, corps: { type: 'ECHEC', motif: 'La préprod ne répond pas après le déploiement (simulation).' } }];
+    }
+    const branche = (ticket.branche ?? `claude/${ticket.id}`).replace('claude/', '');
+    return [{ apres: d, corps: { type: 'PREPROD_DEPLOYEE', urlPreprod: `https://preprod.exemple.test/${branche}`, version: `simu${ticket.id}` } }];
   }
 
   private etapesDeploiement(ticket: Ticket): Etape[] {

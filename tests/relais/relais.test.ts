@@ -230,6 +230,22 @@ describe('mode simulé de bout en bout', () => {
     expect(t.design).toContain('# Design');
   });
 
+  it('#simu:echec-preprod bloque en dev, puis la relance ne refait que la préprod', async () => {
+    const app = creerAppSimulee();
+    const id = await nouveauTicket(app, 'Préprod capricieuse #simu:echec-preprod');
+    await agirSur(app, id, 'lancer-conception');
+    await attendre(app, id, (x) => x.urlMaquette !== null);
+    await agirSur(app, id, 'lancer-dev');
+    const bloque = await attendre(app, id, (x) => x.blocage !== null);
+    expect(bloque).toMatchObject({ colonne: 'dev', iteration: 3 });
+    expect(bloque.blocage?.motif).toContain('préprod');
+
+    await agirSur(app, id, 'relancer');
+    const t = await attendre(app, id, (x) => x.colonne === 'test');
+    expect(t.iteration).toBe(3);
+    expect(t.urlPreprod).toMatch(/^https:\/\/preprod\.exemple\.test\//);
+  });
+
   it('#simu:echec-deploiement bloque en déploiement sans passer en Done', async () => {
     const app = creerAppSimulee();
     const id = await nouveauTicket(app, 'Mise en ligne #simu:echec-deploiement');

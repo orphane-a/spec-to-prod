@@ -12,6 +12,8 @@ export interface Projet {
   depot: string | null;
   urlPreprod: string | null;
   urlProd: string | null;
+  /** Branche par défaut du dépôt : les pipelines y sont lancés et la prod y fusionne. */
+  branchePrincipale: string;
 }
 
 export interface Quota {
@@ -161,6 +163,17 @@ export class DepotTickets {
     return this.lire(id);
   }
 
+  /** Autre ticket du projet qui occupe la préprod : en test, ou en cours de déploiement en préprod. */
+  occupantPreprod(projetId: number, saufTicketId: number): number | null {
+    const ligne = this.base
+      .prepare(
+        `SELECT id FROM tickets WHERE projet_id = ? AND id != ? AND (colonne = 'test' OR run_en_cours = 'preprod')
+         ORDER BY modifie_le LIMIT 1`,
+      )
+      .get(projetId, saufTicketId) as Ligne | undefined;
+    return ligne ? Number(ligne.id) : null;
+  }
+
   supprimer(id: number): void {
     this.base.prepare('DELETE FROM tickets WHERE id = ?').run(id);
   }
@@ -303,6 +316,7 @@ export class DepotProjets {
       depot: texte(l.depot),
       urlPreprod: texte(l.url_preprod),
       urlProd: texte(l.url_prod),
+      branchePrincipale: String(l.branche_principale),
     }));
   }
 

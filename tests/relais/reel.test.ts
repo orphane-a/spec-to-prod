@@ -9,7 +9,7 @@ const TACHES = Object.fromEntries(
   (['spec', 'design', 'dev'] as const).map((e) => [e, { url: `https://api.anthropic.com/v1/claude_code/routines/trig_${e}/fire`, jeton: `${JETON}-${e}` }]),
 ) as Record<EtapeClaude, { url: string; jeton: string }>;
 
-const PROJET: Projet = { id: 1, nom: 'Optivie', depot: 'orphane-a/optivie', urlPreprod: 'https://preprod.optivie.orphane.fr', urlProd: null };
+const PROJET: Projet = { id: 1, nom: 'Optivie', depot: 'orphane-a/optivie', urlPreprod: 'https://preprod.optivie.orphane.fr', urlProd: null, branchePrincipale: 'master' };
 const MAINTENANT = Date.parse('2026-11-17T10:00:00.000Z');
 
 function run(type: Run['type']): Run {
