@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DEFINITIONS_COLONNES } from '../domaine/colonnes';
-import type { Ticket } from '../domaine/types';
+import { resultatDepot, type ActionDepot } from '../domaine/glisser-deposer';
+import type { Colonne as IdColonne, Ticket } from '../domaine/types';
 import { api, type Action } from './api';
 import { Carte, type OngletFiche } from './composants/Carte';
 import { Colonne } from './composants/Colonne';
@@ -26,6 +27,8 @@ export function App() {
   const [fenetre, setFenetre] = useState<Fenetre>({ type: 'aucune' });
   const [occupes, setOccupes] = useState<Set<number>>(new Set());
   const [erreurAction, setErreurAction] = useState<string | null>(null);
+  const [glisseId, setGlisseId] = useState<number | null>(null);
+  const [survol, setSurvol] = useState<IdColonne | null>(null);
 
   const nomProjet = (id: number | null) => projets.find((p) => p.id === id)?.nom ?? null;
   const ticketPar = (id: number) => tickets.find((t) => t.id === id);
@@ -48,7 +51,22 @@ export function App() {
     }
   }
 
-  const ficheOuverte = fenetre.type === 'fiche' ? ticketPar(fenetre.id) : undefined;
+  const glisse = glisseId === null ? undefined : ticketPar(glisseId);
+
+  function finGlisser() {
+    setGlisseId(null);
+    setSurvol(null);
+  }
+
+  /** Un dépôt accepté déclenche la même décision que le bouton de la carte. */
+  function deposer(ticket: Ticket, action: ActionDepot) {
+    finGlisser();
+    if (action === 'LANCER_CONCEPTION') void agir(ticket, 'lancer-conception');
+    else if (action === 'LANCER_DEV') void agir(ticket, 'lancer-dev');
+    else setFenetre({ type: 'deploiement', id: ticket.id });
+  }
+
+  const ficheOuverte =fenetre.type === 'fiche' ? ticketPar(fenetre.id) : undefined;
   const aModifier = fenetre.type === 'modification' ? ticketPar(fenetre.id) : undefined;
   const aDeployer = fenetre.type === 'deploiement' ? ticketPar(fenetre.id) : undefined;
   const aSupprimer = fenetre.type === 'suppression' ? ticketPar(fenetre.id) : undefined;
@@ -90,12 +108,28 @@ export function App() {
         <div className="tableau">
           {DEFINITIONS_COLONNES.map((definition, index) => {
             const contenu = visibles.filter((t) => t.colonne === definition.id);
+            const resultat = glisse ? resultatDepot(glisse, definition.id) : null;
             return (
-              <Colonne key={definition.id} definition={definition} premiere={index === 0} nombre={contenu.length}>
+              <Colonne
+                key={definition.id}
+                definition={definition}
+                premiere={index === 0}
+                nombre={contenu.length}
+                depot={{
+                  resultat,
+                  survolee: survol === definition.id,
+                  entrer: () => setSurvol(definition.id),
+                  sortir: () => setSurvol((s) => (s === definition.id ? null : s)),
+                  deposer: () => glisse && resultat?.type === 'action' && deposer(glisse, resultat.action),
+                }}
+              >
                 {contenu.map((ticket) => (
                   <Carte
                     key={ticket.id}
                     ticket={ticket}
+                    glissee={glisseId === ticket.id}
+                    commencerGlisser={() => setGlisseId(ticket.id)}
+                    finirGlisser={finGlisser}
                     projet={nomProjet(ticket.projetId)}
                     occupe={occupes.has(ticket.id)}
                     ouvrir={(onglet) => setFenetre({ type: 'fiche', id: ticket.id, onglet: onglet ?? (ticket.blocage ? 'journal' : 'description') })}

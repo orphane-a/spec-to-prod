@@ -14,9 +14,32 @@ interface Props {
   lancerDev: () => void;
   demanderDeploiement: () => void;
   relancer: () => void;
+  glissee: boolean;
+  commencerGlisser: () => void;
+  finirGlisser: () => void;
 }
 
+/** Enveloppe glissable : un ticket terminé ou en cours d'action ne se déplace pas. */
 export function Carte(props: Props) {
+  const { ticket, occupe, glissee } = props;
+  const deplacable = ticket.colonne !== 'done' && !occupe;
+  return (
+    <div
+      className={`carte-deplacable${deplacable ? ' actif' : ''}${glissee ? ' glissee' : ''}`}
+      draggable={deplacable}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(ticket.id));
+        props.commencerGlisser();
+      }}
+      onDragEnd={props.finirGlisser}
+    >
+      <ContenuCarte {...props} />
+    </div>
+  );
+}
+
+function ContenuCarte(props: Props) {
   const { ticket } = props;
   if (ticket.blocage) return <CarteBloquee {...props} />;
   if (ticket.colonne === 'done') return <CarteDone {...props} />;
