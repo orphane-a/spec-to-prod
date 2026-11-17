@@ -27,8 +27,16 @@ const schema = z
     ROUTINE_DESIGN_JETON: jetonTache,
     ROUTINE_DEV_URL: urlTache,
     ROUTINE_DEV_JETON: jetonTache,
+    /** Adresse d'écoute : 127.0.0.1 sur un poste, 0.0.0.0 dans le conteneur du VPS. */
+    HOST: z.string().default('127.0.0.1'),
+    /** Mot de passe unique du tableau. Obligatoire dès que le serveur est joignable de l'extérieur. */
+    MOT_DE_PASSE: z.string().min(12, 'MOT_DE_PASSE doit contenir au moins 12 caractères').optional(),
   })
   .superRefine((c, ctx) => {
+    const local = ['127.0.0.1', 'localhost', '::1'].includes(c.HOST);
+    if (!c.MOT_DE_PASSE && (c.CLAUDE_MODE === 'reel' || !local)) {
+      ctx.addIssue({ code: 'custom', path: ['MOT_DE_PASSE'], message: 'MOT_DE_PASSE est obligatoire en mode reel ou hors écoute locale' });
+    }
     if (c.CLAUDE_MODE !== 'reel') return;
     const obligatoires = [
       'WEBHOOK_SECRET',

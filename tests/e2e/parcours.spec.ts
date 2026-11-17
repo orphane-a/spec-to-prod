@@ -1,5 +1,27 @@
 import { expect, test, type Page } from '@playwright/test';
 
+export const MOT_DE_PASSE = 'mot-de-passe-des-tests-e2e';
+
+// Chaque parcours commence connecté : le cookie de session est partagé avec la page.
+test.beforeEach(async ({ page }, info) => {
+  if (info.title.startsWith('connexion')) return;
+  const r = await page.request.post('/api/connexion', { data: { motDePasse: MOT_DE_PASSE } });
+  expect(r.status()).toBe(204);
+});
+
+test('connexion : le tableau demande le mot de passe et refuse un mauvais', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Ajouter un ticket' })).toHaveCount(0);
+  await page.getByLabel('Mot de passe').fill('mauvais mot de passe');
+  await page.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(page.getByText('Mot de passe incorrect.')).toBeVisible();
+  await page.getByLabel('Mot de passe').fill(MOT_DE_PASSE);
+  await page.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(page.getByRole('button', { name: 'Ajouter un ticket' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Ajouter un ticket' })).toBeVisible();
+});
+
 const colonne = (page: Page, nom: string) => page.getByRole('region', { name: nom, exact: true });
 
 async function ajouterTicket(page: Page, titre: string, description: string) {

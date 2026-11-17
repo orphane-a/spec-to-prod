@@ -10,12 +10,15 @@ import { enregistrerGestionErreurs, enregistrerRoutesApi } from './api/routes';
 import { ServiceTickets, horlogeSysteme, type Horloge } from './service-tickets';
 import type { Executeurs } from './relais/executeur';
 import { enregistrerWebhooks } from './relais/webhooks';
+import { enregistrerAcces } from './acces';
 
 export interface OptionsApp {
-  config: Pick<Config, 'BASE_CHEMIN' | 'ITERATIONS_MAX' | 'WEBHOOK_SECRET'>;
+  config: Pick<Config, 'BASE_CHEMIN' | 'ITERATIONS_MAX' | 'WEBHOOK_SECRET'> & Partial<Pick<Config, 'MOT_DE_PASSE'>>;
   executeurs: Executeurs;
   horloge?: Horloge;
   journalisation?: boolean;
+  /** Horloge des sessions, en millisecondes, pour les tests. */
+  maintenantMs?: () => number;
 }
 
 export interface App {
@@ -35,8 +38,11 @@ export function creerApp(options: OptionsApp): App {
   const horloge = options.horloge ?? horlogeSysteme;
   const service = new ServiceTickets(depots, options.executeurs, diffuseur, horloge);
 
-  const serveur = Fastify({ logger: options.journalisation ?? false, bodyLimit: 1_048_576 });
+  // Derrière Traefik sur le VPS : le protocole et l'adresse viennent des en têtes X-Forwarded.
+  const serveur = Fastify({ logger: options.journalisation ?? false, bodyLimit: 1_048_576, trustProxy: true });
   enregistrerGestionErreurs(serveur);
+  enregistrerAcces(serveur, { motDePasse: options.config.MOT_DE_PASSE, secret: options.config.WEBHOOK_SECRET, maintenant: options.maintenantMs });
+  serveur.get('/api/sante', async () => ({ statut: 'ok', version: process.env.SOURCE_COMMIT || 'local' }));
   enregistrerRoutesApi(serveur, service, depots, diffuseur);
   enregistrerWebhooks(serveur, { secret: options.config.WEBHOOK_SECRET, service, depots, diffuseur, horloge });
 
