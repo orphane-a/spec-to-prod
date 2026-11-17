@@ -25,10 +25,15 @@ test('un ticket va du backlog à Done avec trois décisions et une confirmation'
 
   await carte.getByRole('button', { name: 'Lancer la conception' }).click();
   const enConception = colonne(page, 'En conception').getByRole('article', { name: titre });
-  await expect(enConception.getByText('Spec prête')).toBeVisible();
+  await expect(enConception.getByText('Claude conçoit la maquette')).toBeVisible();
+  await expect(enConception.getByRole('button', { name: 'Lancer le dev' })).toBeDisabled();
+  await expect(enConception.getByText('Spec et maquette prêtes')).toBeVisible();
 
-  await enConception.getByRole('button', { name: 'Lire la spec' }).click();
+  await enConception.getByRole('button', { name: 'Voir le design' }).click();
   const fiche = page.getByRole('dialog', { name: titre });
+  await expect(fiche.getByRole('heading', { name: 'Écrans' })).toBeVisible();
+  await expect(fiche.getByRole('link', { name: 'Ouvrir la maquette' })).toHaveAttribute('href', /^https:\/\/maquette\.exemple\.test\//);
+  await fiche.getByRole('tab', { name: 'Spec' }).click();
   await expect(fiche.getByRole('heading', { name: 'Exigences indispensables' })).toBeVisible();
   await fiche.getByRole('button', { name: 'Fermer' }).click();
 
@@ -98,7 +103,7 @@ test('glisser une carte déclenche les décisions manuelles, et seulement elles'
   // Backlog vers En conception : la conception démarre.
   await carte.dragTo(colonne(page, 'En conception'));
   const enConception = colonne(page, 'En conception').getByRole('article', { name: titre });
-  await expect(enConception.getByText('Spec prête')).toBeVisible();
+  await expect(enConception.getByText('Spec et maquette prêtes')).toBeVisible();
 
   // En conception vers En dev : le dev démarre.
   await enConception.dragTo(colonne(page, 'En dev'));

@@ -18,7 +18,7 @@ export interface SaisieTicket {
   projetId: number | null;
 }
 
-export type Action = 'lancer-conception' | 'lancer-dev' | 'deployer-prod' | 'relancer';
+export type Action = 'lancer-conception' | 'lancer-design' | 'lancer-dev' | 'deployer-prod' | 'relancer';
 
 export class ErreurApi extends Error {}
 
