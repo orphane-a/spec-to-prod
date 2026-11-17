@@ -53,5 +53,6 @@ npm run typecheck
 - `src/domaine` : machine à états et types, sans dépendance au serveur ni au navigateur.
 - `src/serveur` : Fastify, base SQLite (`node:sqlite`), service des tickets, relais et webhooks.
 - `src/web` : interface React.
-- `taches-cloud` : prompts des tâches cloud Claude (spec, design, dev), script de signalement et guide `MISE_EN_ROUTE.md` pour passer en mode réel.
+- `taches-cloud` : prompts des tâches cloud Claude (spec, design, dev), scripts de signalement des sessions et des pipelines, et guide `MISE_EN_ROUTE.md` pour passer en mode réel et mettre le tableau en ligne.
+- `Dockerfile` et `docker-compose.yml` : mise en ligne par Coolify sur le VPS.
 - `tests` : tests unitaires, API, relais et bout en bout.

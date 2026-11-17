@@ -24,10 +24,10 @@ Champs utiles : `runId`, `ticket.id`, `ticket.titre`, `ticket.spec`, `ticket.des
    - signale l'itération au kanban avec `ITERATION_TERMINEE`, chaque contrôle valant `vert` ou `rouge` ;
    - si tout est vert, sors de la boucle. Sinon, corrige et recommence.
 5. Si tout est vert :
-   - commite par petites étapes avec des messages clairs, pousse la branche ;
+   - commite par petites étapes avec des messages clairs, pousse la branche : c'est elle que le pipeline du projet déploiera en préprod ;
    - ouvre une pull request en brouillon vers la branche par défaut, avec le lien de la maquette ;
-   - écris au moins deux scénarios de test humains : le cas nominal, au moins un cas d'erreur, puis un scénario par critère d'acceptation de la spec. Chacun a un objectif, des étapes et un résultat attendu, en français simple ;
-   - signale `DEV_TERMINE` avec `urlPreprod` égal à `projet.urlPreprod`, les contrôles tous à `vert` et les scénarios.
+   - écris au moins deux scénarios de test humains : le cas nominal, au moins un cas d'erreur, puis un scénario par critère d'acceptation de la spec. Chacun a un objectif, des étapes et un résultat attendu, en français simple. Les étapes partent de l'adresse de la préprod (`projet.urlPreprod`) ;
+   - signale `DEV_TERMINE` avec les contrôles tous à `vert` et les scénarios. Ne déploie rien toi même : le kanban lance ensuite la préprod.
 6. Si la dernière itération autorisée est encore rouge, pousse quand même la branche pour garder le travail, puis arrête toi après le signalement `ITERATION_TERMINEE` : le kanban bloque le ticket tout seul.
 
 Si tu ne peux pas commencer (branche absente, dépôt introuvable, spec vide), signale `ECHEC` avec un motif court et clair en français.
@@ -53,7 +53,6 @@ Dev terminé :
   "runId": "<runId>",
   "evenement": {
     "type": "DEV_TERMINE",
-    "urlPreprod": "<projet.urlPreprod>",
     "controles": { "unitaires": "vert", "non_regression": "vert", "exploratoire": "vert" },
     "scenarios": [{ "objectif": "Cas nominal", "etapes": "...", "resultatAttendu": "..." }]
   }

@@ -223,7 +223,7 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
 **Décisions prises pendant la phase 1** 🧭
 
 - 📊 Source de la jauge de quota : aucune API ne donne le quota de l'abonnement. Par défaut : valeur transmise par les webhooks des sessions (fictive en mode simulé), et passage en épuisé dès qu'un lancement est refusé pour quota.
-- 🔐 Accès au tableau sur internet : à trancher avant la mise en ligne. Par défaut : un mot de passe unique en variable d'environnement et un cookie de session.
+- 🔐 Accès au tableau sur internet : un mot de passe unique (MOT_DE_PASSE), un cookie de session signé valable 30 jours, blocage de 15 minutes après 5 essais ratés. Spec to prod ne sert qu'à son utilisatrice et à ses projets branchés sur son compte Claude.
 - 🧠 Échec de rédaction de la spec : le ticket reste en En conception avec le badge Bloqué, sa description intacte.
 - 🌿 Nom de branche : claude/identifiant-titre-court, par exemple claude/12-fiche-personnage.
 - 🖱️ Glisser déposer : absent en v1. Seuls les boutons font avancer un ticket, ce qui rend tout saut de colonne impossible.
@@ -243,7 +243,16 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
 - 🔁 Aucune relance automatique d'un appel /fire : l'endpoint n'est pas idempotent, un nouvel essai lancerait une deuxième session.
 - 🔕 Session silencieuse : sans signalement depuis 60 minutes (RUN_SILENCE_MAX_MIN), le ticket passe en Bloqué avec le lien de la session. Cela couvre un quota épuisé en cours de run, que rien d'autre ne signale.
 - 🔐 Les sessions cloud signent leurs webhooks avec le secret partagé, stocké comme variable de l'environnement cloud (SPEC_TO_PROD_SECRET), via le script taches-cloud/signaler.mjs.
-- 🧪 Préprod : en attendant le pipeline de préprod, la session de dev renvoie l'URL de préprod du projet. Le déploiement réel de la branche en préprod est la prochaine tâche, car P0.4 exige une préprod à jour avant En test.
+
+**Décisions prises pour la préprod et la prod** 🚀
+
+- 🧪 Fin du dev : le ticket reste En dev et la préprod est déployée seule. Il passe En test seulement quand le pipeline confirme que la préprod affiche la bonne version, comme l'exige P0.4.
+- 🔒 Une seule préprod par projet : un deuxième ticket du même projet est bloqué avec « Préprod occupée par le ticket X » tant que le premier est en test. La relance, manuelle, ne refait que la préprod.
+- ⚙️ Pipeline : chaque projet porte .github/workflows/spec-to-prod.yml, lancé par le kanban (workflow_dispatch) avec un jeton GitHub à droits fins limité au droit Actions. Le pipeline déploie avec ses propres secrets et prévient le kanban avec taches-cloud/pipeline.mjs.
+- 🌿 Fusion avant la mise en prod : le pipeline fusionne la branche du ticket dans la branche principale, puis déploie et vérifie la version.
+- 🟢 Optivie : la branche preprod devient une copie de la branche du ticket, Coolify déploie, /api/sante doit afficher le commit. Il faut activer SOURCE_COMMIT dans Coolify.
+- 🗳️ Demandez le programme : deployer.sh publie et écrit public/version.txt, que le pipeline vérifie.
+- 🏠 Hébergement de Spec to prod : application Coolify sur le VPS, sous domaine kanban.orphane.fr par défaut, base SQLite sur un volume.
 
 ## 🗓️ Planning et phasage
 
