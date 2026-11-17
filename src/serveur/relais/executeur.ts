@@ -1,9 +1,11 @@
 import type { Ticket } from '../../domaine/types';
-import type { Run } from '../base/depots';
+import type { Projet, Run } from '../base/depots';
 
 export interface DemandeRun {
   run: Run;
   ticket: Ticket;
+  /** Projet du ticket : il porte le dépôt GitHub et les URL de préprod et de prod. */
+  projet: Projet | null;
 }
 
 export interface ReponseLancement {

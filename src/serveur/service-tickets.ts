@@ -92,19 +92,42 @@ export class ServiceTickets {
       this.depots.runs.clore(run.id, 'abandonne', this.horloge());
       return { ignore: true, raison: 'Run périmé : le ticket a changé d’étape.' };
     }
-    const ticket = await this.appliquer(avant, evenement, 'systeme');
-    if (ticket.runEnCours === null) {
-      this.depots.runs.clore(run.id, ticket.blocage ? 'echoue' : 'termine', ticket.modifieLe);
-    }
+    this.depots.runs.signalerNouvelle(run.id, this.horloge());
+    // Le run se clôt dès que le ticket le quitte, avant le démarrage de l'étape suivante (spec puis design).
+    const ticket = await this.appliquer(avant, evenement, 'systeme', (apres) => {
+      if (apres.runEnCours !== run.type) this.depots.runs.clore(run.id, apres.blocage ? 'echoue' : 'termine', apres.modifieLe);
+    });
     return { ignore: false, ticket };
   }
 
-  private async appliquer(avant: Ticket, evenement: Evenement, acteur: Acteur): Promise<Ticket> {
+  /**
+   * Runs Claude ou pipeline restés sans nouvelles trop longtemps : le ticket passe en Bloqué
+   * avec le lien de la session. Il ne repart jamais seul.
+   */
+  async surveillerSilences(silenceMaxMinutes: number): Promise<number> {
+    const limite = new Date(Date.parse(this.horloge()) - silenceMaxMinutes * 60_000).toISOString();
+    let bloques = 0;
+    for (const run of this.depots.runs.silencieuxDepuis(limite)) {
+      const session = run.urlSession ? ` Session : ${run.urlSession}` : '';
+      const motif = `La session ne donne plus de nouvelles depuis ${silenceMaxMinutes} minutes.${session}`;
+      try {
+        const resultat = await this.recevoir(run.id, { type: 'ECHEC', motif });
+        if (!resultat.ignore) bloques++;
+      } catch {
+        // Le ticket a bougé entre temps : le run n'a plus lieu d'être.
+        this.depots.runs.clore(run.id, 'abandonne', this.horloge());
+      }
+    }
+    return bloques;
+  }
+
+  private async appliquer(avant: Ticket, evenement: Evenement, acteur: Acteur, avantEffets?: (apres: Ticket) => void): Promise<Ticket> {
     const maintenant = this.horloge();
     const resultat = transition(avant, evenement, acteur, { maintenant });
     if (!resultat.ok) throw new ErreurMetier(409, resultat.code, resultat.message);
 
     this.depots.tickets.sauver(resultat.ticket, resultat.journal);
+    avantEffets?.(resultat.ticket);
     if (evenement.type === 'QUOTA_ATTEINT') this.marquerQuotaEpuise(evenement.repriseEstimee);
     if (evenement.type === 'RELANCER' && avant.blocage?.cause === 'quota') this.marquerQuotaRetabli();
     this.diffuseur.publier({ type: 'ticket', ticket: resultat.ticket });
@@ -119,7 +142,8 @@ export class ServiceTickets {
     const run = this.depots.runs.ouvrir(ticket.id, effet.run, maintenant);
     const executeur = effet.run === 'deploiement' ? this.executeurs.deploiement : this.executeurs.claude;
     try {
-      const reponse = await executeur.lancer({ run, ticket });
+      const projet = ticket.projetId === null ? null : this.depots.projets.lire(ticket.projetId);
+      const reponse = await executeur.lancer({ run, ticket, projet });
       if (reponse.urlSession) {
         this.depots.runs.definirSession(run.id, reponse.urlSession);
         this.depots.tickets.journaliser(ticket.id, [{ type: 'action', detail: `Session démarrée : ${reponse.urlSession}` }], maintenant);

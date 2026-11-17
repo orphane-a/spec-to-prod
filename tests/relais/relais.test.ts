@@ -147,7 +147,7 @@ describe('mode simulé de bout en bout', () => {
     const id = await nouveauTicket(app);
 
     await agirSur(app, id, 'lancer-conception');
-    let t = await attendre(app, id, (x) => x.spec !== null);
+    let t = await attendre(app, id, (x) => x.urlMaquette !== null);
     expect(t.colonne).toBe('conception');
     expect(t.spec).toContain('# Planning des bénévoles');
 
@@ -167,7 +167,7 @@ describe('mode simulé de bout en bout', () => {
     const app = creerAppSimulee();
     const id = await nouveauTicket(app);
     await agirSur(app, id, 'lancer-conception');
-    await attendre(app, id, (x) => x.spec !== null);
+    await attendre(app, id, (x) => x.urlMaquette !== null);
     await agirSur(app, id, 'lancer-dev');
     await attendre(app, id, (x) => x.colonne === 'test');
     await new Promise((r) => setTimeout(r, 50));
@@ -178,7 +178,7 @@ describe('mode simulé de bout en bout', () => {
     const app = creerAppSimulee();
     const id = await nouveauTicket(app, 'Export CSV #simu:iterations');
     await agirSur(app, id, 'lancer-conception');
-    await attendre(app, id, (x) => x.spec !== null);
+    await attendre(app, id, (x) => x.urlMaquette !== null);
     await agirSur(app, id, 'lancer-dev');
     const bloque = await attendre(app, id, (x) => x.blocage !== null);
     expect(bloque.blocage?.motif).toBe('5 itérations atteintes, 2 contrôles échouent.');
@@ -201,7 +201,7 @@ describe('mode simulé de bout en bout', () => {
     expect(app.service.lire(id).blocage?.cause).toBe('quota');
 
     await agirSur(app, id, 'relancer');
-    const t = await attendre(app, id, (x) => x.spec !== null);
+    const t = await attendre(app, id, (x) => x.urlMaquette !== null);
     expect(t.blocage).toBe(null);
     expect(app.depots.quota.lire().epuise).toBe(false);
   });
@@ -215,11 +215,26 @@ describe('mode simulé de bout en bout', () => {
     expect(t.description).toBe('Description précieuse #simu:echec-spec');
   });
 
+  it('#simu:echec-design bloque en conception, garde la spec et la relance ne refait que le design', async () => {
+    const app = creerAppSimulee();
+    const id = await nouveauTicket(app, 'Maquette #simu:echec-design');
+    await agirSur(app, id, 'lancer-conception');
+    const bloque = await attendre(app, id, (x) => x.blocage !== null);
+    expect(bloque.colonne).toBe('conception');
+    expect(bloque.spec).not.toBe(null);
+    expect(bloque.urlMaquette).toBe(null);
+
+    await agirSur(app, id, 'relancer');
+    const t = await attendre(app, id, (x) => x.urlMaquette !== null);
+    expect(t.specVersion).toBe(1);
+    expect(t.design).toContain('# Design');
+  });
+
   it('#simu:echec-deploiement bloque en déploiement sans passer en Done', async () => {
     const app = creerAppSimulee();
     const id = await nouveauTicket(app, 'Mise en ligne #simu:echec-deploiement');
     await agirSur(app, id, 'lancer-conception');
-    await attendre(app, id, (x) => x.spec !== null);
+    await attendre(app, id, (x) => x.urlMaquette !== null);
     await agirSur(app, id, 'lancer-dev');
     await attendre(app, id, (x) => x.colonne === 'test');
     await agirSur(app, id, 'deployer-prod', { confirmation: true });

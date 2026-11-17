@@ -30,6 +30,8 @@ export interface Run {
   statut: StatutRun;
   urlSession: string | null;
   debut: string;
+  /** Date du dernier signe de vie : lancement ou webhook reçu. */
+  derniereNouvelle: string;
   fin: string | null;
 }
 
@@ -59,6 +61,9 @@ function versTicket(l: Ligne, scenarios: Ligne[]): Ticket {
     runEnCours: (l.run_en_cours as TypeRun | null) ?? null,
     spec: texte(l.spec_markdown),
     specVersion: Number(l.spec_version),
+    design: texte(l.design_markdown),
+    urlMaquette: texte(l.url_maquette),
+    designVersion: Number(l.design_version),
     branche: texte(l.branche),
     iteration: Number(l.iteration),
     iterationMax: Number(l.iteration_max),
@@ -166,7 +171,8 @@ export class DepotTickets {
       this.base
         .prepare(
           `UPDATE tickets SET colonne = ?, bloque_motif = ?, bloque_cause = ?, bloque_le = ?, reprise_estimee = ?,
-             run_en_cours = ?, spec_markdown = ?, spec_version = ?, branche = ?, iteration = ?, iteration_max = ?,
+             run_en_cours = ?, spec_markdown = ?, spec_version = ?, design_markdown = ?, url_maquette = ?, design_version = ?,
+             branche = ?, iteration = ?, iteration_max = ?,
              controles_dev = ?, etapes_deploiement = ?, url_preprod = ?, version_deployee = ?, deploye_le = ?, modifie_le = ?
            WHERE id = ?`,
         )
@@ -179,6 +185,9 @@ export class DepotTickets {
           ticket.runEnCours,
           ticket.spec,
           ticket.specVersion,
+          ticket.design,
+          ticket.urlMaquette,
+          ticket.designVersion,
           ticket.branche,
           ticket.iteration,
           ticket.iterationMax,
@@ -240,10 +249,23 @@ export class DepotRuns {
         .prepare("UPDATE runs SET statut = 'abandonne', fin = ? WHERE ticket_id = ? AND statut = 'en_cours'")
         .run(maintenant, ticketId);
       this.base
-        .prepare("INSERT INTO runs (id, ticket_id, type, statut, debut) VALUES (?, ?, ?, 'en_cours', ?)")
-        .run(id, ticketId, type, maintenant);
+        .prepare("INSERT INTO runs (id, ticket_id, type, statut, debut, derniere_nouvelle) VALUES (?, ?, ?, 'en_cours', ?, ?)")
+        .run(id, ticketId, type, maintenant, maintenant);
     });
     return this.lire(id)!;
+  }
+
+  /** Note un signe de vie du run (webhook reçu). */
+  signalerNouvelle(id: string, maintenant: string): void {
+    this.base.prepare("UPDATE runs SET derniere_nouvelle = ? WHERE id = ? AND statut = 'en_cours'").run(maintenant, id);
+  }
+
+  /** Runs encore ouverts dont la dernière nouvelle est antérieure à la date donnée. */
+  silencieuxDepuis(limite: string): Run[] {
+    const lignes = this.base
+      .prepare("SELECT id FROM runs WHERE statut = 'en_cours' AND derniere_nouvelle < ? ORDER BY derniere_nouvelle")
+      .all(limite) as Ligne[];
+    return lignes.map((l) => this.lire(String(l.id))!);
   }
 
   lire(id: string): Run | null {
@@ -256,6 +278,7 @@ export class DepotRuns {
       statut: l.statut as StatutRun,
       urlSession: texte(l.url_session),
       debut: String(l.debut),
+      derniereNouvelle: String(l.derniere_nouvelle),
       fin: texte(l.fin),
     };
   }
@@ -285,6 +308,10 @@ export class DepotProjets {
 
   existe(id: number): boolean {
     return this.base.prepare('SELECT 1 FROM projets WHERE id = ?').get(id) !== undefined;
+  }
+
+  lire(id: number): Projet | null {
+    return this.lister().find((p) => p.id === id) ?? null;
   }
 
   parNom(nom: string): Projet | null {

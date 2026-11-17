@@ -153,6 +153,15 @@ describe('parcours complet jusqu’en Done', () => {
     // Un deuxième webhook pour le même run est ignoré : idempotence.
     expect(await app.service.recevoir(runSpec.id, { type: 'SPEC_PRETE', spec: 'bis' })).toMatchObject({ ignore: true });
 
+    // La spec prête enchaîne seule sur le design, sur la branche fixée en conception.
+    const runDesign = app.claude.dernierRun();
+    expect(runDesign.type).toBe('design');
+    expect(app.claude.demandes.at(-1)?.ticket.branche).toBe('claude/1-planning-des-benevoles');
+    expect((await agir(app, id, 'lancer-dev')).statusCode).toBe(409);
+    r = await app.service.recevoir(runDesign.id, { type: 'DESIGN_PRET', resume: '# Écrans', urlMaquette: 'https://github.com/o/r/blob/b/m.html' });
+    expect(r).toMatchObject({ ignore: false, ticket: { designVersion: 1, runEnCours: null } });
+    expect(app.depots.runs.lire(runDesign.id)?.statut).toBe('termine');
+
     const dev = await agir(app, id, 'lancer-dev');
     expect(dev.json()).toMatchObject({ colonne: 'dev', branche: 'claude/1-planning-des-benevoles' });
     const runDev = app.claude.dernierRun();
@@ -197,10 +206,63 @@ describe('parcours complet jusqu’en Done', () => {
     expect((await app.service.recevoir(nouveau.id, { type: 'SPEC_PRETE', spec: '# neuf' })).ignore).toBe(false);
   });
 
+  it('un design en échec se relance seul, sans réécrire la spec', async () => {
+    const { id } = await creerTicket(app);
+    await agir(app, id, 'lancer-conception');
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'SPEC_PRETE', spec: '# Spec' });
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'ECHEC', motif: 'Maquette impossible.' });
+    expect(app.service.lire(id).blocage?.motif).toBe('Maquette impossible.');
+    const relance = await agir(app, id, 'relancer');
+    expect(relance.json()).toMatchObject({ runEnCours: 'design', spec: '# Spec' });
+    expect(app.claude.dernierRun().type).toBe('design');
+  });
+
+  it('lance le design d’un ticket repris avec une spec mais sans maquette', async () => {
+    const { id } = await creerTicket(app);
+    await agir(app, id, 'lancer-conception');
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'SPEC_PRETE', spec: '# Spec' });
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'ECHEC', motif: 'x' });
+    // Simule un ticket importé : spec présente, aucun design, aucun blocage.
+    app.depots.tickets.sauver({ ...app.service.lire(id), blocage: null }, []);
+    const r = await agir(app, id, 'lancer-design');
+    expect(r.json()).toMatchObject({ runEnCours: 'design' });
+  });
+
   it('les scénarios ne se cochent qu’en phase de test', async () => {
     const { id } = await creerTicket(app);
     const r = await app.serveur.inject({ method: 'PATCH', url: `/api/tickets/${id}/scenarios/1`, payload: { fait: true } });
     expect(r.statusCode).toBe(409);
+  });
+});
+
+describe('surveillance des sessions silencieuses', () => {
+  it('bloque un run sans nouvelles au delà du délai, avec le lien de la session', async () => {
+    const { id } = await creerTicket(app);
+    await agir(app, id, 'lancer-conception');
+    const run = app.claude.dernierRun();
+
+    // L'horloge de test avance d'une seconde par lecture : 0 minute de silence suffit à déclencher.
+    expect(await app.service.surveillerSilences(60)).toBe(0);
+    expect(await app.service.surveillerSilences(0)).toBe(1);
+
+    const t = app.service.lire(id);
+    expect(t.colonne).toBe('conception');
+    expect(t.blocage).toMatchObject({ cause: 'echec' });
+    expect(t.blocage?.motif).toContain('https://claude.ai/code/session-test');
+    expect(app.depots.runs.lire(run.id)?.statut).toBe('echoue');
+    // Il ne repart jamais seul.
+    expect(await app.service.surveillerSilences(0)).toBe(0);
+    expect(app.claude.demandes).toHaveLength(1);
+  });
+
+  it('chaque webhook reçu repousse le délai', async () => {
+    const { id } = await creerTicket(app);
+    await agir(app, id, 'lancer-conception');
+    const run = app.claude.dernierRun();
+    await app.service.recevoir(run.id, { type: 'SPEC_PRETE', spec: '# Spec' });
+    const design = app.depots.runs.lire(app.claude.dernierRun().id)!;
+    expect(design.derniereNouvelle > run.debut).toBe(true);
+    expect(await app.service.surveillerSilences(60)).toBe(0);
   });
 });
 

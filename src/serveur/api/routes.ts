@@ -17,6 +17,7 @@ const scenarioParamsSchema = idSchema.extend({ ordre: z.coerce.number().int().po
 
 const ACTIONS = {
   'lancer-conception': () => ({ type: 'LANCER_CONCEPTION' }),
+  'lancer-design': () => ({ type: 'LANCER_DESIGN' }),
   'lancer-dev': () => ({ type: 'LANCER_DEV' }),
   'deployer-prod': (corps: unknown) => ({
     type: 'DEPLOYER_PROD',
