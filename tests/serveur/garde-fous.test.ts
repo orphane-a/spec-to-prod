@@ -32,4 +32,13 @@ describe('lecture de la configuration', () => {
   it('exige un secret de webhook assez long', () => {
     expect(() => lireConfig({ WEBHOOK_SECRET: 'court' })).toThrow(/WEBHOOK_SECRET/);
   });
+
+  it('génère un secret éphémère en mode simulé', () => {
+    expect(lireConfig({}).WEBHOOK_SECRET.length).toBeGreaterThanOrEqual(32);
+  });
+
+  it('exige un secret en mode réel', () => {
+    expect(() => lireConfig({ CLAUDE_MODE: 'reel' })).toThrow(/WEBHOOK_SECRET/);
+    expect(lireConfig({ CLAUDE_MODE: 'reel', WEBHOOK_SECRET: secret }).WEBHOOK_SECRET).toBe(secret);
+  });
 });
