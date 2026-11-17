@@ -138,7 +138,7 @@ describe('mode simulé de bout en bout', () => {
     app.serveur.inject({ method: 'POST', url: `/api/tickets/${id}/actions/${action}`, payload });
 
   async function nouveauTicket(app: ReturnType<typeof creerAppSimulee>, description = 'Idée simple.') {
-    const r = await app.serveur.inject({ method: 'POST', url: '/api/tickets', payload: { titre: 'Planning des bénévoles', description, projetId: 1 } });
+    const r = await app.serveur.inject({ method: 'POST', url: '/api/tickets', payload: { titre: 'Planning des bénévoles', description, projetId: 3 } });
     return r.json().id as number;
   }
 

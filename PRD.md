@@ -231,6 +231,7 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
 - 🧪 Scénarios de test : au moins deux (cas nominal et cas d'erreur) pour passer en En test ; ils se cochent seulement pendant la phase de test.
 - ↩️ Retour de En test vers En dev : reporté, il fait partie des exigences P1.
 - 💾 SQLite passe par le module node:sqlite intégré à Node, car la politique de sécurité Windows bloque les modules natifs comme better-sqlite3.
+- 📥 Reprise des anciens kanbans en artefact (Optivie, Elections 2027 devenu Demandez le programme) : les colonnes En test IA et En test Anne vont toutes deux dans En test, les cartes supprimées ne sont pas reprises, l'historique de chaque carte devient son journal. Le projet AMLF est retiré.
 
 ## 🗓️ Planning et phasage
 
