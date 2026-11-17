@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { resultatDepot } from '../../src/domaine/glisser-deposer';
 import { transition } from '../../src/domaine/machine-etats';
 import { COLONNES, type Colonne, type Ticket } from '../../src/domaine/types';
-import { CTX, MAINTENANT, ticket } from './fixtures';
+import { CTX, MAINTENANT, URL_MAQUETTE, ticket } from './fixtures';
 
 /** Ticket prêt pour la décision manuelle de sa colonne. */
 const pret: Record<Colonne, Ticket> = {
   backlog: ticket({ colonne: 'backlog' }),
-  conception: ticket({ colonne: 'conception', spec: '# Spec', specVersion: 1 }),
+  conception: ticket({ colonne: 'conception', spec: '# Spec', specVersion: 1, design: '# Design', urlMaquette: URL_MAQUETTE, designVersion: 1 }),
   dev: ticket({ colonne: 'dev', runEnCours: 'dev' }),
   test: ticket({ colonne: 'test' }),
   deploiement: ticket({ colonne: 'deploiement', runEnCours: 'deploiement' }),

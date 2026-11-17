@@ -6,7 +6,7 @@ export type Colonne = (typeof COLONNES)[number];
 export const ACTEURS = ['utilisatrice', 'systeme'] as const;
 export type Acteur = (typeof ACTEURS)[number];
 
-export const TYPES_RUN = ['spec', 'dev', 'deploiement'] as const;
+export const TYPES_RUN = ['spec', 'design', 'dev', 'deploiement'] as const;
 export type TypeRun = (typeof TYPES_RUN)[number];
 
 export const etatControleSchema = z.enum(['en_attente', 'en_cours', 'vert', 'rouge']);
@@ -57,6 +57,11 @@ export interface Ticket {
   runEnCours: TypeRun | null;
   spec: string | null;
   specVersion: number;
+  /** Résumé markdown du design : écrans, composants, états et textes. */
+  design: string | null;
+  /** Lien vers la maquette HTML commitée sur la branche du ticket. */
+  urlMaquette: string | null;
+  designVersion: number;
   branche: string | null;
   iteration: number;
   iterationMax: number;
@@ -74,6 +79,8 @@ export interface Ticket {
 export const evenementSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('LANCER_CONCEPTION') }),
   z.object({ type: z.literal('SPEC_PRETE'), spec: z.string() }),
+  z.object({ type: z.literal('LANCER_DESIGN') }),
+  z.object({ type: z.literal('DESIGN_PRET'), resume: z.string(), urlMaquette: z.string() }),
   z.object({ type: z.literal('LANCER_DEV') }),
   z.object({
     type: z.literal('ITERATION_TERMINEE'),
@@ -99,6 +106,8 @@ export type TypeEvenement = Evenement['type'];
 export const TYPES_EVENEMENT = [
   'LANCER_CONCEPTION',
   'SPEC_PRETE',
+  'LANCER_DESIGN',
+  'DESIGN_PRET',
   'LANCER_DEV',
   'ITERATION_TERMINEE',
   'DEV_TERMINE',
@@ -110,7 +119,7 @@ export const TYPES_EVENEMENT = [
   'RELANCER',
 ] as const satisfies readonly TypeEvenement[];
 
-export type TypeJournal = 'transition' | 'action' | 'iteration' | 'test' | 'blocage' | 'deblocage' | 'deploiement' | 'spec';
+export type TypeJournal = 'transition' | 'action' | 'iteration' | 'test' | 'blocage' | 'deblocage' | 'deploiement' | 'spec' | 'design';
 
 export interface EntreeJournal {
   type: TypeJournal;

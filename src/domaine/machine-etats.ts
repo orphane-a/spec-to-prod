@@ -27,6 +27,8 @@ interface Regle {
 const REGLES: Record<TypeEvenement, Regle> = {
   LANCER_CONCEPTION: { acteur: 'utilisatrice', depuis: ['backlog'] },
   SPEC_PRETE: { acteur: 'systeme', depuis: ['conception'] },
+  LANCER_DESIGN: { acteur: 'utilisatrice', depuis: ['conception'] },
+  DESIGN_PRET: { acteur: 'systeme', depuis: ['conception'] },
   LANCER_DEV: { acteur: 'utilisatrice', depuis: ['conception'] },
   ITERATION_TERMINEE: { acteur: 'systeme', depuis: ['dev'] },
   DEV_TERMINE: { acteur: 'systeme', depuis: ['dev'] },
@@ -39,11 +41,15 @@ const REGLES: Record<TypeEvenement, Regle> = {
   RELANCER: { acteur: 'utilisatrice', depuis: ['conception', 'dev', 'deploiement'] },
 };
 
-const RUN_PAR_COLONNE: Partial<Record<Colonne, TypeRun>> = {
-  conception: 'spec',
-  dev: 'dev',
-  deploiement: 'deploiement',
+/** Run à relancer dans chaque colonne. En conception, seule l'étape qui manque repart. */
+const RUN_A_RELANCER: Partial<Record<Colonne, (ticket: Ticket) => TypeRun>> = {
+  conception: (ticket) => (ticket.spec?.trim() ? 'design' : 'spec'),
+  dev: () => 'dev',
+  deploiement: () => 'deploiement',
 };
+
+const designPret = (ticket: Ticket) => Boolean(ticket.design?.trim() && ticket.urlMaquette);
+const estLienWeb = (url: string) => /^https?:\/\/\S+$/i.test(url.trim());
 
 export const MOTIF_QUOTA = 'Quota Claude atteint';
 export const SCENARIOS_MINIMUM = 2;
@@ -99,7 +105,8 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
   switch (evenement.type) {
     case 'LANCER_CONCEPTION':
       return succes(
-        { ...t, colonne: 'conception', runEnCours: 'spec' },
+        // La branche est fixée dès maintenant : la maquette y sera commitée.
+        { ...t, colonne: 'conception', runEnCours: 'spec', branche: ticket.branche ?? nomBranche(ticket.id, ticket.titre) },
         [passage('backlog', 'conception'), { type: 'action', detail: 'Vous avez lancé la conception. Claude rédige la spec.' }],
         [demarrer('spec')],
       );
@@ -108,15 +115,41 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
       if (ticket.runEnCours !== 'spec') return condition('Aucune rédaction de spec en cours.');
       if (!evenement.spec.trim()) return condition('La spec reçue est vide.');
       const version = ticket.specVersion + 1;
-      return succes({ ...t, spec: evenement.spec, specVersion: version, runEnCours: null }, [
-        { type: 'spec', detail: `Spec prête, version ${version}.` },
+      return succes(
+        { ...t, spec: evenement.spec, specVersion: version, runEnCours: 'design' },
+        [
+          { type: 'spec', detail: `Spec prête, version ${version}.` },
+          { type: 'action', detail: 'Claude conçoit la maquette.' },
+        ],
+        [demarrer('design')],
+      );
+    }
+
+    case 'LANCER_DESIGN':
+      if (ticket.runEnCours) return condition('Attendez la fin du run en cours.');
+      if (!ticket.spec?.trim()) return condition('Le design demande une spec rattachée au ticket.');
+      if (designPret(ticket)) return condition('Ce ticket a déjà son design.');
+      return succes(
+        { ...t, runEnCours: 'design', branche: ticket.branche ?? nomBranche(ticket.id, ticket.titre) },
+        [{ type: 'action', detail: 'Vous avez lancé le design. Claude conçoit la maquette.' }],
+        [demarrer('design')],
+      );
+
+    case 'DESIGN_PRET': {
+      if (ticket.runEnCours !== 'design') return condition('Aucun design en cours.');
+      if (!evenement.resume.trim()) return condition('Le résumé du design est vide.');
+      if (!estLienWeb(evenement.urlMaquette)) return condition('La maquette doit être un lien web.');
+      const version = ticket.designVersion + 1;
+      return succes({ ...t, design: evenement.resume, urlMaquette: evenement.urlMaquette.trim(), designVersion: version, runEnCours: null }, [
+        { type: 'design', detail: `Design prêt, version ${version}. Maquette : ${evenement.urlMaquette.trim()}` },
       ]);
     }
 
     case 'LANCER_DEV': {
       if (!ticket.spec?.trim()) return condition('Lancer le dev demande une spec rattachée au ticket.');
-      if (ticket.runEnCours) return condition('Attendez la fin de la rédaction de la spec.');
-      const branche = nomBranche(ticket.id, ticket.titre);
+      if (ticket.runEnCours) return condition('Attendez la fin de la conception.');
+      if (!designPret(ticket)) return condition('Lancer le dev demande un design rattaché au ticket.');
+      const branche = ticket.branche ?? nomBranche(ticket.id, ticket.titre);
       return succes(
         { ...t, colonne: 'dev', runEnCours: 'dev', branche, iteration: 0, controles: { ...CONTROLES_INITIAUX } },
         [passage('conception', 'dev'), { type: 'action', detail: `Vous avez lancé le dev sur la branche ${branche}.` }],
@@ -213,7 +246,7 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
 
     case 'RELANCER': {
       if (!ticket.blocage) return condition('Seul un ticket bloqué peut être relancé.');
-      const run = RUN_PAR_COLONNE[ticket.colonne];
+      const run = RUN_A_RELANCER[ticket.colonne]?.(ticket);
       if (!run) return refus('TRANSITION_INTERDITE', 'Rien à relancer dans cette colonne.');
       const relance: Ticket = { ...t, blocage: null, runEnCours: run };
       if (run === 'dev') Object.assign(relance, { iteration: 0, controles: { ...CONTROLES_INITIAUX } });
