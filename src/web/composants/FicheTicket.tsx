@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { definitionColonne } from '../../domaine/colonnes';
+import { refusCorrection } from '../../domaine/correction-manuelle';
 import { estModifiable, estSupprimable } from '../../domaine/machine-etats';
 import type { EvenementJournal, Ticket } from '../../domaine/types';
 import { api } from '../api';
 import { formaterHeure, formaterHorodatage } from '../format';
 import type { OngletFiche } from './Carte';
+import { EditeurCorrection } from './EditeurCorrection';
 import { Fenetre } from './Fenetre';
 
 interface Props {
@@ -72,8 +74,8 @@ export function FicheTicket({ ticket, projet, ongletInitial, fermer, modifier, s
 
       <div role="tabpanel" id={`panneau-${onglet}`} aria-labelledby={`onglet-${onglet}`} className="section">
         {onglet === 'description' && <Description ticket={ticket} modifier={modifier} supprimer={supprimer} />}
-        {onglet === 'spec' && <Spec ticket={ticket} />}
-        {onglet === 'design' && <Design ticket={ticket} />}
+        {onglet === 'spec' && <Spec ticket={ticket} remplacer={remplacer} />}
+        {onglet === 'design' && <Design ticket={ticket} remplacer={remplacer} />}
         {onglet === 'scenarios' && <Scenarios ticket={ticket} remplacer={remplacer} />}
         {onglet === 'journal' && <Journal ticket={ticket} />}
       </div>
@@ -112,35 +114,80 @@ function Description({ ticket, modifier, supprimer }: { ticket: Ticket; modifier
   );
 }
 
-function Spec({ ticket }: { ticket: Ticket }) {
-  const html = useMemo(() => (ticket.spec ? DOMPurify.sanitize(marked.parse(ticket.spec, { async: false })) : ''), [ticket.spec]);
-  if (!ticket.spec) {
-    return <p className="texte">{ticket.runEnCours === 'spec' ? 'Claude rédige la spec. Elle apparaîtra ici.' : 'Pas encore de spec pour ce ticket.'}</p>;
+/**
+ * Bouton « Modifier » d'un bloc (spec ou design) et état d'édition.
+ * La règle vient du domaine, la même que celle du serveur : conception ou dev, sans run en cours.
+ */
+function useCorrection(ticket: Ticket) {
+  const [edition, setEdition] = useState(false);
+  const bouton = useRef<HTMLButtonElement>(null);
+  const refus = refusCorrection(ticket);
+
+  function termine() {
+    setEdition(false);
+    // Le bouton revient après l'affichage : on lui rend le focus pour le clavier.
+    requestAnimationFrame(() => bouton.current?.focus());
   }
+
+  const boutonModifier =
+    refus === null ? (
+      <button ref={bouton} type="button" className="bouton bouton-contour" onClick={() => setEdition(true)}>
+        Modifier
+      </button>
+    ) : refus.code === 'RUN_EN_COURS' ? (
+      <p className="texte-petit" style={{ margin: 0 }}>
+        La modification est possible quand aucun run ne tourne.
+      </p>
+    ) : null;
+
+  return { edition: edition && refus === null, termine, boutonModifier };
+}
+
+function Spec({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticket) => void }) {
+  const html = useMemo(() => (ticket.spec ? DOMPurify.sanitize(marked.parse(ticket.spec, { async: false })) : ''), [ticket.spec]);
+  const { edition, termine, boutonModifier } = useCorrection(ticket);
+
+  if (edition) return <EditeurCorrection genre="spec" ticket={ticket} remplacer={remplacer} termine={termine} />;
   return (
     <>
-      <p className="texte-petit">Version {ticket.specVersion}</p>
-      <div className="spec" dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="entete-bloc">
+        {ticket.spec ? <p className="texte-petit">Version {ticket.specVersion}</p> : <span />}
+        {boutonModifier}
+      </div>
+      {ticket.spec ? (
+        <div className="spec" dangerouslySetInnerHTML={{ __html: html }} />
+      ) : (
+        <p className="texte">{ticket.runEnCours === 'spec' ? 'Claude rédige la spec. Elle apparaîtra ici.' : 'Pas encore de spec pour ce ticket.'}</p>
+      )}
     </>
   );
 }
 
-function Design({ ticket }: { ticket: Ticket }) {
+function Design({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticket) => void }) {
   const html = useMemo(() => (ticket.design ? DOMPurify.sanitize(marked.parse(ticket.design, { async: false })) : ''), [ticket.design]);
-  if (!ticket.design) {
-    return <p className="texte">{ticket.runEnCours === 'design' ? 'Claude conçoit la maquette. Elle apparaîtra ici.' : 'Pas encore de design pour ce ticket.'}</p>;
-  }
+  const { edition, termine, boutonModifier } = useCorrection(ticket);
+
+  if (edition) return <EditeurCorrection genre="design" ticket={ticket} remplacer={remplacer} termine={termine} />;
   return (
     <>
-      <p className="texte-petit">Version {ticket.designVersion}</p>
-      {ticket.urlMaquette && /^https?:\/\//i.test(ticket.urlMaquette) && (
-        <p style={{ marginTop: 0 }}>
-          <a href={ticket.urlMaquette} target="_blank" rel="noreferrer noopener">
-            Ouvrir la maquette
-          </a>
-        </p>
+      <div className="entete-bloc">
+        {ticket.design ? <p className="texte-petit">Version {ticket.designVersion}</p> : <span />}
+        {boutonModifier}
+      </div>
+      {ticket.design ? (
+        <>
+          {ticket.urlMaquette && /^https?:\/\//i.test(ticket.urlMaquette) && (
+            <p style={{ marginTop: 0 }}>
+              <a href={ticket.urlMaquette} target="_blank" rel="noreferrer noopener">
+                Ouvrir la maquette
+              </a>
+            </p>
+          )}
+          <div className="spec" dangerouslySetInnerHTML={{ __html: html }} />
+        </>
+      ) : (
+        <p className="texte">{ticket.runEnCours === 'design' ? 'Claude conçoit la maquette. Elle apparaîtra ici.' : 'Pas encore de design pour ce ticket.'}</p>
       )}
-      <div className="spec" dangerouslySetInnerHTML={{ __html: html }} />
     </>
   );
 }

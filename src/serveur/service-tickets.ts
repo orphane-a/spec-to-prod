@@ -1,9 +1,23 @@
+import type { ZodType } from 'zod';
+import { correctionDesignSchema, correctionSpecSchema, detailJournalDesign, detailJournalSpec, refusCorrection } from '../domaine/correction-manuelle';
 import { estModifiable, estSupprimable, transition } from '../domaine/machine-etats';
 import type { Acteur, Effet, Evenement, Ticket } from '../domaine/types';
 import type { Depots, SaisieTicket } from './base/depots';
 import type { Diffuseur } from './diffuseur';
 import { ErreurMetier, introuvable } from './erreurs';
 import { QuotaAtteintErreur, type Executeurs } from './relais/executeur';
+import { TAILLE_MAX_TEXTE } from './relais/reel';
+
+/** Place gardée dans la demande au dev pour le titre, la description, le projet et le lien du relais. */
+const MARGE_CHARGE = 20_000;
+
+function validerCorrection<T>(schema: ZodType<T>, corps: unknown): T {
+  const resultat = schema.safeParse(corps);
+  if (!resultat.success) {
+    throw new ErreurMetier(400, 'DONNEES_INVALIDES', resultat.error.issues[0]?.message ?? 'Données invalides.');
+  }
+  return resultat.data;
+}
 
 export type Horloge = () => string;
 export const horlogeSysteme: Horloge = () => new Date().toISOString();
@@ -74,6 +88,32 @@ export class ServiceTickets {
     const misAJour = this.lire(id);
     this.diffuseur.publier({ type: 'ticket', ticket: misAJour });
     return misAJour;
+  }
+
+  /**
+   * Correction à la main de la spec, par exemple après un retour sur la maquette.
+   * Ce n'est pas une transition : la machine à états n'intervient pas et le ticket garde sa colonne.
+   * Tout est synchrone, de la lecture à l'écriture : aucun webhook ne peut s'intercaler.
+   */
+  corrigerSpec(id: number, corps: unknown): Ticket {
+    const ticket = this.lirePourCorrection(id);
+    const { spec } = validerCorrection(correctionSpecSchema, corps);
+    this.verifierTailleCharge({ spec, design: ticket.design, urlMaquette: ticket.urlMaquette });
+    const version = ticket.specVersion + 1;
+    const corrige = this.depots.tickets.corrigerSpec(id, spec, version, this.horloge(), { type: 'spec', detail: detailJournalSpec(version) });
+    this.diffuseur.publier({ type: 'ticket', ticket: corrige });
+    return corrige;
+  }
+
+  /** Correction à la main du design : résumé markdown et lien de la maquette. Même règles que la spec. */
+  corrigerDesign(id: number, corps: unknown): Ticket {
+    const ticket = this.lirePourCorrection(id);
+    const { design, urlMaquette } = validerCorrection(correctionDesignSchema, corps);
+    this.verifierTailleCharge({ spec: ticket.spec, design, urlMaquette });
+    const version = ticket.designVersion + 1;
+    const corrige = this.depots.tickets.corrigerDesign(id, design, urlMaquette, version, this.horloge(), { type: 'design', detail: detailJournalDesign(version) });
+    this.diffuseur.publier({ type: 'ticket', ticket: corrige });
+    return corrige;
   }
 
   /** Action déclenchée par l'utilisatrice depuis l'interface. */
@@ -176,6 +216,23 @@ export class ServiceTickets {
     if (!quota.epuise) return;
     const misAJour = this.depots.quota.ecrire({ ...quota, epuise: false, repriseEstimee: null }, this.horloge());
     this.diffuseur.publier({ type: 'quota', quota: misAJour });
+  }
+
+  private lirePourCorrection(id: number): Ticket {
+    const ticket = this.lire(id);
+    const refus = refusCorrection(ticket);
+    if (refus) throw new ErreurMetier(409, refus.code, refus.message);
+    return ticket;
+  }
+
+  /**
+   * Le relais refuse une demande trop grosse pour la tâche cloud. On refuse donc dès l'enregistrement
+   * un texte que la session de dev ne pourrait pas recevoir, en gardant de la marge pour le reste de la charge.
+   */
+  private verifierTailleCharge(textes: { spec: string | null; design: string | null; urlMaquette: string | null }): void {
+    if (JSON.stringify(textes, null, 2).length > TAILLE_MAX_TEXTE - MARGE_CHARGE) {
+      throw new ErreurMetier(400, 'TEXTE_TROP_LONG', 'La spec et le design réunis sont trop longs pour la session de dev. Raccourcis le texte.');
+    }
   }
 
   private verifierProjet(projetId: number | null): void {

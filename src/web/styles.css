@@ -847,3 +847,23 @@ dialog::backdrop {
   flex-direction: column;
   gap: 12px;
 }
+
+.entete-bloc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.entete-bloc .texte-petit {
+  margin: 0;
+}
+
+.champ textarea.editeur-texte {
+  min-height: 320px;
+  font-family: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}

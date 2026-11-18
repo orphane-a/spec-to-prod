@@ -233,6 +233,14 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
 - 💾 SQLite passe par le module node:sqlite intégré à Node, car la politique de sécurité Windows bloque les modules natifs comme better-sqlite3.
 - 📥 Reprise des anciens kanbans en artefact (Optivie, Elections 2027 devenu Demandez le programme) : les colonnes En test IA et En test Anne vont toutes deux dans En test, les cartes supprimées ne sont pas reprises, l'historique de chaque carte devient son journal. Le projet AMLF est retiré.
 - 🗑️ Suppression d'un ticket : possible dans toutes les colonnes, Bloqué et Done compris, mais refusée tant qu'un run tourne (spec, design, dev, préprod ou déploiement), pour ne pas couper un déploiement ni recevoir un webhook pour un ticket disparu. La modification reste réservée au backlog. Supprimer un ticket efface son journal, ses scénarios et ses runs, mais ne touche ni à sa branche GitHub ni à ce qui est déjà en ligne. 18 novembre 2026.
+- ✏️ Correction à la main de la spec et du design (18 novembre 2026) : permise en En conception et en En dev, tant qu'aucun run ne tourne, y compris quand le ticket est Bloqué. Ailleurs, ou avec un run en cours, le serveur répond 409 avec un message clair. Ce n'est pas une transition : la colonne ne change jamais, la machine à états n'est pas touchée, aucun run ne démarre et un ticket Bloqué le reste. Chaque correction ajoute 1 à la version de la spec ou du design et écrit une entrée de journal (« Spec modifiée à la main (version 3). »). Valeurs par défaut retenues :
+  1. Les textes sont débarrassés des espaces au début et à la fin ; la spec et le résumé du design ne peuvent pas être vides.
+  2. Le lien de la maquette doit être une adresse https valide, plus strict que le webhook DESIGN_PRET, qui accepte aussi http.
+  3. Le design peut être écrit à la main même s'il n'existe pas encore (première version).
+  4. Taille : la spec et le design réunis doivent rester sous 45 000 caractères environ, soit la limite du champ de la tâche cloud (65 536) moins une marge de 20 000 pour le reste de la demande. Au delà, le serveur refuse en 400 plutôt que de laisser le dev échouer au lancement.
+  5. Pas de gestion de conflit entre deux éditions : la dernière enregistrée gagne, pour une seule utilisatrice.
+  6. L'éditeur est un champ de texte simple, sans aperçu en direct. Changer d'onglet pendant une édition abandonne le brouillon, Échap l'annule sans fermer la fiche.
+  7. L'API ne revient pas sur la règle de PATCH /api/tickets/:id : titre, description et projet restent modifiables seulement dans le backlog.
 
 **Décisions prises pour la connexion à Claude** 🔌
 
