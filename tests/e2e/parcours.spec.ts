@@ -140,7 +140,30 @@ test('glisser une carte déclenche les décisions manuelles, et seulement elles'
   await expect(enTest).toBeVisible();
 });
 
-test('le backlog se modifie et se supprime, pas les autres colonnes', async ({ page }) => {
+test('un ticket se supprime hors du backlog quand aucun run ne tourne', async ({ page }) => {
+  await page.goto('/');
+  const titre = 'Ticket à abandonner';
+  await ajouterTicket(page, titre, 'Plus utile');
+  await colonne(page, 'Backlog').getByRole('article', { name: titre }).dragTo(colonne(page, 'En conception'));
+  const enConception = colonne(page, 'En conception').getByRole('article', { name: titre });
+
+  // Pendant la rédaction de la spec, ni modifier ni supprimer.
+  await enConception.getByRole('button', { name: titre }).click();
+  const fiche = page.getByRole('dialog', { name: titre });
+  await expect(fiche.getByRole('button', { name: 'Supprimer' })).toHaveCount(0);
+  await expect(fiche.getByRole('button', { name: 'Modifier' })).toHaveCount(0);
+
+  // Une fois spec et maquette prêtes, la suppression redevient possible, la modification non.
+  await expect(fiche.getByRole('button', { name: 'Supprimer' })).toBeVisible({ timeout: 15_000 });
+  await expect(fiche.getByRole('button', { name: 'Modifier' })).toHaveCount(0);
+  await fiche.getByRole('button', { name: 'Supprimer' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Supprimer ce ticket ?' });
+  await expect(confirmation.getByText('La branche GitHub et ce qui est déjà en ligne ne seront pas touchés.')).toBeVisible();
+  await confirmation.getByRole('button', { name: 'Supprimer' }).click();
+  await expect(page.getByRole('article', { name: titre })).toHaveCount(0);
+});
+
+test('le backlog se modifie et se supprime', async ({ page }) => {
   await page.goto('/');
   const carte = await ajouterTicket(page, 'Idée à jeter', 'Brouillon');
   await carte.getByRole('button', { name: 'Idée à jeter' }).click();

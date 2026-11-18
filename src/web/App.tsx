@@ -216,6 +216,9 @@ export function App() {
           }}
         >
           <p style={{ margin: 0 }}>« {aSupprimer.titre} » et son journal seront supprimés définitivement.</p>
+          {(aSupprimer.branche || aSupprimer.versionDeployee) && (
+            <p style={{ marginBottom: 0 }}>La branche GitHub et ce qui est déjà en ligne ne seront pas touchés.</p>
+          )}
         </Confirmation>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionsDisponibles, transition } from '../../src/domaine/machine-etats';
+import { actionsDisponibles, estModifiable, estSupprimable, transition } from '../../src/domaine/machine-etats';
 import { indexColonne, nomBranche } from '../../src/domaine/colonnes';
 import { ACTEURS, COLONNES, TYPES_EVENEMENT, type Acteur, type Colonne, type TypeEvenement } from '../../src/domaine/types';
 import { CTX, EVENEMENTS, MAINTENANT, SCENARIOS, SCENARIOS_ENREGISTRES, TOUT_VERT, URL_MAQUETTE, ticket, ticketFavorable } from './fixtures';
@@ -557,5 +557,24 @@ describe('nom de branche', () => {
 
   it('tronque les titres longs', () => {
     expect(nomBranche(1, 'a'.repeat(80)).length).toBeLessThanOrEqual('claude/1-'.length + 40);
+  });
+});
+
+describe('modification et suppression', () => {
+  it.each(COLONNES)('supprime un ticket sans run en cours en %s', (colonne) => {
+    expect(estSupprimable(ticket({ colonne }))).toBe(true);
+  });
+
+  it('supprime un ticket bloqué', () => {
+    const blocage = { motif: 'Quota Claude atteint', cause: 'quota', le: MAINTENANT, repriseEstimee: null } as const;
+    expect(estSupprimable(ticket({ colonne: 'dev', blocage }))).toBe(true);
+  });
+
+  it.each(['spec', 'design', 'dev', 'preprod', 'deploiement'] as const)('refuse la suppression pendant un run %s', (runEnCours) => {
+    expect(estSupprimable(ticket({ colonne: 'dev', runEnCours }))).toBe(false);
+  });
+
+  it('ne modifie que le backlog', () => {
+    expect(COLONNES.filter((colonne) => estModifiable(ticket({ colonne })))).toEqual(['backlog']);
   });
 });

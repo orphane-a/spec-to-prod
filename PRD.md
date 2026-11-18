@@ -73,7 +73,7 @@ Conséquences si rien ne change : des idées qui stagnent dans le backlog, des t
 **P0.1 Tableau et backlog manuel** 📋
 
 - [ ] Le tableau affiche six colonnes : Backlog, En conception, En dev, En test, Déploiement en prod, Done.
-- [ ] Je peux créer, modifier et supprimer un ticket du backlog (titre, description, projet concerné).
+- [ ] Je peux créer et modifier un ticket du backlog (titre, description, projet concerné), et supprimer un ticket de n'importe quelle colonne quand aucun run ne tourne.
 - [ ] Seul le backlog accepte la création manuelle de tickets.
 - [ ] Aucun ticket ne peut être déplacé par glisser déposer vers une colonne qui ne respecte pas le parcours.
 
@@ -232,6 +232,7 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
 - ↩️ Retour de En test vers En dev : reporté, il fait partie des exigences P1.
 - 💾 SQLite passe par le module node:sqlite intégré à Node, car la politique de sécurité Windows bloque les modules natifs comme better-sqlite3.
 - 📥 Reprise des anciens kanbans en artefact (Optivie, Elections 2027 devenu Demandez le programme) : les colonnes En test IA et En test Anne vont toutes deux dans En test, les cartes supprimées ne sont pas reprises, l'historique de chaque carte devient son journal. Le projet AMLF est retiré.
+- 🗑️ Suppression d'un ticket : possible dans toutes les colonnes, Bloqué et Done compris, mais refusée tant qu'un run tourne (spec, design, dev, préprod ou déploiement), pour ne pas couper un déploiement ni recevoir un webhook pour un ticket disparu. La modification reste réservée au backlog. Supprimer un ticket efface son journal, ses scénarios et ses runs, mais ne touche ni à sa branche GitHub ni à ce qui est déjà en ligne. 18 novembre 2026.
 
 **Décisions prises pour la connexion à Claude** 🔌
 
