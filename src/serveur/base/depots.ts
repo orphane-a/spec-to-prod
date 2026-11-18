@@ -223,6 +223,29 @@ export class DepotTickets {
     });
   }
 
+  /**
+   * Correction à la main de la spec : seuls les champs de la spec changent, dans la même transaction que le journal.
+   * Pas de `sauver` ici, qui réécrirait tout le ticket et pourrait écraser un webhook arrivé entre temps.
+   */
+  corrigerSpec(id: number, spec: string, version: number, maintenant: string, journal: EntreeJournal): Ticket {
+    return enTransaction(this.base, () => {
+      this.base.prepare('UPDATE tickets SET spec_markdown = ?, spec_version = ?, modifie_le = ? WHERE id = ?').run(spec, version, maintenant, id);
+      this.journaliserSansTransaction(id, [journal], maintenant);
+      return this.lire(id)!;
+    });
+  }
+
+  /** Correction à la main du design : résumé, lien de la maquette et version, avec son entrée de journal. */
+  corrigerDesign(id: number, design: string, urlMaquette: string, version: number, maintenant: string, journal: EntreeJournal): Ticket {
+    return enTransaction(this.base, () => {
+      this.base
+        .prepare('UPDATE tickets SET design_markdown = ?, url_maquette = ?, design_version = ?, modifie_le = ? WHERE id = ?')
+        .run(design, urlMaquette, version, maintenant, id);
+      this.journaliserSansTransaction(id, [journal], maintenant);
+      return this.lire(id)!;
+    });
+  }
+
   marquerScenario(ticketId: number, ordre: number, fait: boolean): boolean {
     const { changes } = this.base
       .prepare('UPDATE scenarios SET fait = ? WHERE ticket_id = ? AND ordre = ?')
