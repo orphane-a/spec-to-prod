@@ -74,9 +74,9 @@ Pour chacune :
 
 **Le jeton du kanban.** Sur GitHub, dans Settings, Developer settings, Fine-grained tokens, crée un jeton :
 - Dépôts : seulement `orphane-a/optivie` et `orphane-a/elections2027`.
-- Droit : Actions en lecture et écriture, rien d'autre.
+- Droits : Actions en lecture et écriture, Contents en lecture seule, rien d'autre.
 
-Colle le dans Coolify sous `GITHUB_JETON`. Il ne sert qu'à lancer les pipelines.
+Colle le dans Coolify sous `GITHUB_JETON`. Il sert à lancer les pipelines et à lire les maquettes pour les afficher dans la fiche du ticket.
 
 **Dans chaque dépôt de projet**, dans Settings, Secrets and variables, Actions :
 - Secret `SPEC_TO_PROD_SECRET` : la valeur de `WEBHOOK_SECRET`.

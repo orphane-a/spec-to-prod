@@ -127,18 +127,35 @@ function Spec({ ticket }: { ticket: Ticket }) {
 
 function Design({ ticket }: { ticket: Ticket }) {
   const html = useMemo(() => (ticket.design ? DOMPurify.sanitize(marked.parse(ticket.design, { async: false })) : ''), [ticket.design]);
+  // La version dans l'adresse recharge l'aperçu quand Claude livre un nouveau design.
+  const apercu = `/api/tickets/${ticket.id}/maquette?version=${ticket.designVersion}`;
   if (!ticket.design) {
     return <p className="texte">{ticket.runEnCours === 'design' ? 'Claude conçoit la maquette. Elle apparaîtra ici.' : 'Pas encore de design pour ce ticket.'}</p>;
   }
   return (
     <>
       <p className="texte-petit">Version {ticket.designVersion}</p>
-      {ticket.urlMaquette && /^https?:\/\//i.test(ticket.urlMaquette) && (
-        <p style={{ marginTop: 0 }}>
-          <a href={ticket.urlMaquette} target="_blank" rel="noreferrer noopener">
-            Ouvrir la maquette
-          </a>
-        </p>
+      {ticket.urlMaquette && (
+        <>
+          <iframe
+            className="apercu-maquette"
+            title="Maquette du ticket"
+            src={apercu}
+            sandbox="allow-scripts"
+            referrerPolicy="no-referrer"
+            loading="lazy"
+          />
+          <p className="liens-maquette">
+            <a href={apercu} target="_blank" rel="noreferrer noopener">
+              Ouvrir la maquette en plein écran
+            </a>
+            {/^https?:\/\//i.test(ticket.urlMaquette) && (
+              <a href={ticket.urlMaquette} target="_blank" rel="noreferrer noopener">
+                Voir le fichier source
+              </a>
+            )}
+          </p>
+        </>
       )}
       <div className="spec" dangerouslySetInnerHTML={{ __html: html }} />
     </>

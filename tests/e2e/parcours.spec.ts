@@ -54,7 +54,9 @@ test('un ticket va du backlog à Done avec trois décisions et une confirmation'
   await enConception.getByRole('button', { name: 'Voir le design' }).click();
   const fiche = page.getByRole('dialog', { name: titre });
   await expect(fiche.getByRole('heading', { name: 'Écrans' })).toBeVisible();
-  await expect(fiche.getByRole('link', { name: 'Ouvrir la maquette' })).toHaveAttribute('href', /^https:\/\/maquette\.exemple\.test\//);
+  await expect(fiche.frameLocator('iframe[title="Maquette du ticket"]').getByRole('heading', { name: titre })).toBeVisible();
+  await expect(fiche.getByRole('link', { name: 'Ouvrir la maquette en plein écran' })).toHaveAttribute('href', /^\/api\/tickets\/\d+\/maquette/);
+  await expect(fiche.getByRole('link', { name: 'Voir le fichier source' })).toHaveAttribute('href', /^https:\/\/maquette\.exemple\.test\//);
   await fiche.getByRole('tab', { name: 'Spec' }).click();
   await expect(fiche.getByRole('heading', { name: 'Exigences indispensables' })).toBeVisible();
   await fiche.getByRole('button', { name: 'Fermer' }).click();
