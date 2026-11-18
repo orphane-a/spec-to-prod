@@ -22,9 +22,15 @@ Champs utiles : `runId`, `ticket.id`, `ticket.titre`, `ticket.spec`, `ticket.bra
    - les états utiles : vide, chargement, erreur, succès ;
    - une version téléphone (largeur 375 pixels) en plus de la version ordinateur ;
    - des textes réels en français, en phrases simples, sans tirets longs ni majuscules d'étiquettes.
-4. Commite avec le message « Ajoute la maquette du ticket <ticket.id> » et pousse la branche. Ne fusionne rien, n'ouvre pas de pull request.
-5. Rédige un résumé markdown du design : écrans, composants, états, textes clés, choix notables. Il sert de référence à la session de dev.
-6. Signale le design au kanban avec l'événement `DESIGN_PRET`. Le lien de la maquette est `https://github.com/<projet.depot>/blob/<ticket.branche>/maquettes/ticket-<ticket.id>.html`.
+4. Publie ou mets à jour la maquette comme artefact sur claude.ai, avec l'outil Artifact. Fais le à chaque run, y compris quand la maquette existe déjà :
+   - prépare une copie de publication hors du dépôt (dans ton dossier temporaire) : retire `<!doctype html>`, les balises `<html>`, `<head>`, `<body>` et leurs fermetures, ainsi que les balises meta charset et viewport ; remplace le `<title>` par `Maquette ticket <ticket.id>` ; ne change rien d'autre ;
+   - cherche l'artefact existant du ticket : d'abord le lien noté dans `maquettes/ticket-<ticket.id>.artefact.txt` sur la branche, sinon un artefact intitulé `Maquette ticket <ticket.id>` dans la liste de tes artefacts (`action: "list"`, `limit: 200`) ;
+   - s'il existe, lis le (`action: "read"`) puis publie la copie avec son `url` pour le mettre à jour ; sinon publie la copie sans `url`, avec `icon: "layout"` et une `description` d'une phrase qui reprend le titre du ticket ;
+   - écris le lien de l'artefact, seul sur une ligne, dans `maquettes/ticket-<ticket.id>.artefact.txt`.
+   Si la publication échoue, continue sans artefact et écris « Artefact non publié : <raison> » dans le résumé. Ce n'est pas un échec du ticket.
+5. Commite la maquette et le fichier du lien avec le message « Ajoute la maquette du ticket <ticket.id> » (ou « Met à jour la maquette du ticket <ticket.id> » si elle existait déjà) et pousse la branche. Ne fusionne rien, n'ouvre pas de pull request.
+6. Rédige un résumé markdown du design : écrans, composants, états, textes clés, choix notables. Il sert de référence à la session de dev. Commence le par une ligne « Maquette en ligne : <lien de l'artefact> ».
+7. Signale le design au kanban avec l'événement `DESIGN_PRET`. Le lien de la maquette est `https://github.com/<projet.depot>/blob/<ticket.branche>/maquettes/ticket-<ticket.id>.html`.
 
 Si la spec manque ou si tu ne peux pas pousser la branche, signale `ECHEC` avec un motif court et clair en français.
 
