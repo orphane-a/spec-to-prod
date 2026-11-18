@@ -679,9 +679,15 @@ dialog::backdrop {
   display: flex;
   gap: 4px;
   border-bottom: 1.5px solid var(--rail);
+  /* Six onglets ne tiennent pas sur un téléphone : la barre défile. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .onglet {
+  flex: none;
+  white-space: nowrap;
   min-height: 44px;
   padding: 0 14px;
   border: none;
@@ -884,4 +890,91 @@ dialog::backdrop {
   font-family: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* Onglet Commentaires : retours sur la spec, le design ou les tests. */
+.onglet .compteur {
+  display: inline-block;
+  min-width: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--ambre);
+  color: var(--encre);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.boutons-bloc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.liste-commentaires {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.commentaire {
+  border: 1px solid var(--bordure-carte);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.commentaire-entete,
+.commentaire-pied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 13px;
+}
+
+.commentaire-entete time,
+.commentaire-statut {
+  color: var(--texte-secondaire);
+}
+
+.commentaire-statut.transmis {
+  color: var(--vert-valide);
+}
+
+.commentaire-texte {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bouton-lien {
+  font: inherit;
+  font-size: 13px;
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: 24px;
+  color: var(--rouge-texte);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.formulaire-commentaire {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--brume);
+}
+
+.formulaire-commentaire .actions {
+  align-items: center;
+  justify-content: space-between;
 }

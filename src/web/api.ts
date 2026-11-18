@@ -1,4 +1,4 @@
-import type { EvenementJournal, Ticket } from '../domaine/types';
+import type { EvenementJournal, SujetCommentaire, Ticket } from '../domaine/types';
 
 export interface Projet {
   id: number;
@@ -65,6 +65,10 @@ export const api = {
   corrigerSpec: (id: number, spec: string) => requete<Ticket>(`/api/tickets/${id}/spec`, { method: 'PATCH', body: json({ spec }) }),
   corrigerDesign: (id: number, design: string, urlMaquette: string) =>
     requete<Ticket>(`/api/tickets/${id}/design`, { method: 'PATCH', body: json({ design, urlMaquette }) }),
+  commenter: (id: number, sujet: SujetCommentaire, texte: string) =>
+    requete<Ticket>(`/api/tickets/${id}/commentaires`, { method: 'POST', body: json({ sujet, texte }) }),
+  supprimerCommentaire: (id: number, commentaireId: number) =>
+    requete<Ticket>(`/api/tickets/${id}/commentaires/${commentaireId}`, { method: 'DELETE' }),
   marquerScenario: (id: number, ordre: number, fait: boolean) =>
     requete<Ticket>(`/api/tickets/${id}/scenarios/${ordre}`, { method: 'PATCH', body: json({ fait }) }),
 };

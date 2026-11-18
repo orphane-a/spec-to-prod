@@ -3,7 +3,7 @@ import { actionsDisponibles } from '../../domaine/machine-etats';
 import { formaterHeure, formaterJour, pluriel } from '../format';
 import { IconeAlerte, IconeCercle, IconeCoche, IconeCroix, IconeRotation } from './Icones';
 
-export type OngletFiche = 'description' | 'spec' | 'design' | 'scenarios' | 'journal';
+export type OngletFiche = 'description' | 'spec' | 'design' | 'scenarios' | 'commentaires' | 'journal';
 
 interface Props {
   ticket: Ticket;
