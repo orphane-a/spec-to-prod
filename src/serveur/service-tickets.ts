@@ -1,4 +1,4 @@
-import { estModifiable, transition } from '../domaine/machine-etats';
+import { estModifiable, estSupprimable, transition } from '../domaine/machine-etats';
 import type { Acteur, Effet, Evenement, Ticket } from '../domaine/types';
 import type { Depots, SaisieTicket } from './base/depots';
 import type { Diffuseur } from './diffuseur';
@@ -54,7 +54,9 @@ export class ServiceTickets {
 
   supprimer(id: number): void {
     const ticket = this.lire(id);
-    if (!estModifiable(ticket)) throw new ErreurMetier(409, 'NON_MODIFIABLE', 'Seuls les tickets du backlog se suppriment.');
+    if (!estSupprimable(ticket)) {
+      throw new ErreurMetier(409, 'NON_SUPPRIMABLE', 'Un run est en cours, attends sa fin pour supprimer ce ticket.');
+    }
     this.depots.tickets.supprimer(id);
     this.diffuseur.publier({ type: 'ticket_supprime', id });
   }

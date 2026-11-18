@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { definitionColonne } from '../../domaine/colonnes';
-import { estModifiable } from '../../domaine/machine-etats';
+import { estModifiable, estSupprimable } from '../../domaine/machine-etats';
 import type { EvenementJournal, Ticket } from '../../domaine/types';
 import { api } from '../api';
 import { formaterHeure, formaterHorodatage } from '../format';
@@ -94,14 +94,18 @@ function Description({ ticket, modifier, supprimer }: { ticket: Ticket; modifier
         </p>
       )}
       {ticket.versionDeployee && <p style={{ margin: 0 }}>Version en ligne : {ticket.versionDeployee}</p>}
-      {estModifiable(ticket) && (
+      {(estModifiable(ticket) || estSupprimable(ticket)) && (
         <div className="actions" style={{ justifyContent: 'flex-start' }}>
-          <button type="button" className="bouton bouton-contour" onClick={modifier}>
-            Modifier
-          </button>
-          <button type="button" className="bouton bouton-danger" onClick={supprimer}>
-            Supprimer
-          </button>
+          {estModifiable(ticket) && (
+            <button type="button" className="bouton bouton-contour" onClick={modifier}>
+              Modifier
+            </button>
+          )}
+          {estSupprimable(ticket) && (
+            <button type="button" className="bouton bouton-danger" onClick={supprimer}>
+              Supprimer
+            </button>
+          )}
         </div>
       )}
     </div>

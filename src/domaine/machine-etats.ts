@@ -288,9 +288,17 @@ export function actionsDisponibles(ticket: Ticket): TypeEvenement[] {
   });
 }
 
-/** Seul le backlog accepte modification et suppression. */
+/** Seul le backlog accepte la modification. */
 export function estModifiable(ticket: Ticket): boolean {
   return ticket.colonne === 'backlog';
+}
+
+/**
+ * Un ticket se supprime dans toute colonne, sauf pendant un run :
+ * un webhook arriverait pour un ticket disparu, et un déploiement en prod serait coupé.
+ */
+export function estSupprimable(ticket: Ticket): boolean {
+  return ticket.runEnCours === null;
 }
 
 const LIBELLES_ETAT = { en_attente: 'en attente', en_cours: 'en cours', vert: 'vert', rouge: 'rouge' } as const;

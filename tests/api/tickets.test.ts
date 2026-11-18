@@ -57,13 +57,34 @@ describe('backlog manuel', () => {
     expect((await app.serveur.inject(`/api/tickets/${id}`)).statusCode).toBe(404);
   });
 
-  it('refuse de modifier ou supprimer un ticket sorti du backlog', async () => {
+  it('refuse de modifier un ticket sorti du backlog', async () => {
     const { id } = await creerTicket(app);
     await agir(app, id, 'lancer-conception');
     const modif = await app.serveur.inject({ method: 'PATCH', url: `/api/tickets/${id}`, payload: { titre: 'x' } });
     expect(modif.statusCode).toBe(409);
+  });
+
+  it('refuse de supprimer un ticket pendant un run', async () => {
+    const { id } = await creerTicket(app);
+    await agir(app, id, 'lancer-conception');
     const suppression = await app.serveur.inject({ method: 'DELETE', url: `/api/tickets/${id}` });
     expect(suppression.statusCode).toBe(409);
+    expect(suppression.json().message).toBe('Un run est en cours, attends sa fin pour supprimer ce ticket.');
+    expect((await app.serveur.inject(`/api/tickets/${id}`)).statusCode).toBe(200);
+  });
+
+  it('supprime un ticket bloqué hors du backlog, avec son journal et ses runs', async () => {
+    const { id } = await creerTicket(app);
+    await agir(app, id, 'lancer-conception');
+    const run = app.claude.dernierRun();
+    await app.service.recevoir(run.id, { type: 'ECHEC', motif: 'Erreur' });
+    expect(app.service.lire(id)).toMatchObject({ colonne: 'conception', runEnCours: null });
+    const suppression = await app.serveur.inject({ method: 'DELETE', url: `/api/tickets/${id}` });
+    expect(suppression.statusCode).toBe(204);
+    expect((await app.serveur.inject(`/api/tickets/${id}`)).statusCode).toBe(404);
+    expect((await app.serveur.inject(`/api/tickets/${id}/journal`)).statusCode).toBe(404);
+    // Un webhook tardif du run supprimé ne trouve plus rien.
+    await expect(app.service.recevoir(run.id, { type: 'SPEC_PRETE', spec: '# Spec' })).rejects.toThrow();
   });
 
   it('renvoie 404 pour un ticket inconnu', async () => {
