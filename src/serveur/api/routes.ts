@@ -47,6 +47,14 @@ export function enregistrerRoutesApi(app: FastifyInstance, service: ServiceTicke
     return service.modifier(id, saisieSchema.parse(requete.body));
   });
 
+  /**
+   * Corrections à la main, sans changer de colonne. La validation du corps et les règles métier
+   * (colonne, run en cours, versions, journal) sont dans le service, pas ici.
+   */
+  app.patch('/api/tickets/:id/spec', async (requete) => service.corrigerSpec(idSchema.parse(requete.params).id, requete.body));
+
+  app.patch('/api/tickets/:id/design', async (requete) => service.corrigerDesign(idSchema.parse(requete.params).id, requete.body));
+
   app.delete('/api/tickets/:id', async (requete, reponse) => {
     service.supprimer(idSchema.parse(requete.params).id);
     return reponse.code(204).send();
