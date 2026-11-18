@@ -174,3 +174,60 @@ test('le backlog se modifie et se supprime', async ({ page }) => {
   await page.getByRole('dialog', { name: 'Supprimer ce ticket ?' }).getByRole('button', { name: 'Supprimer' }).click();
   await expect(page.getByRole('article', { name: 'Idée à jeter' })).toHaveCount(0);
 });
+
+test('la spec et le design se corrigent à la main depuis la fiche, sans changer de colonne', async ({ page }) => {
+  await page.goto('/');
+  const titre = 'Correction à la main du design';
+  const carte = await ajouterTicket(page, titre, 'Retravailler la maquette ailleurs, puis corriger la fiche.');
+  await carte.getByRole('button', { name: 'Lancer la conception' }).click();
+  const enConception = colonne(page, 'En conception').getByRole('article', { name: titre });
+  await expect(enConception.getByText('Spec et maquette prêtes')).toBeVisible({ timeout: 15_000 });
+
+  await enConception.getByRole('button', { name: 'Voir le design' }).click();
+  const fiche = page.getByRole('dialog', { name: titre });
+  await expect(fiche.getByText('Version 1')).toBeVisible();
+
+  // Un lien en http est refusé par le serveur : le message s'affiche et le texte saisi reste là.
+  await fiche.getByRole('button', { name: 'Modifier' }).click();
+  const resume = fiche.getByLabel('Résumé du design en markdown');
+  await expect(resume).not.toHaveValue('');
+  await resume.fill('# Écrans retravaillés\n\nLa maquette a été reprise sur Claude Design.');
+  await fiche.getByLabel('Lien de la maquette').fill('http://maquette.exemple.test/refusee.html');
+  await fiche.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(fiche.getByRole('alert')).toHaveText('Le lien de la maquette doit être une adresse https valide.');
+  await expect(resume).toHaveValue(/La maquette a été reprise/);
+
+  const nouveauLien = 'https://claude.ai/design/maquette-retravaillee';
+  await fiche.getByLabel('Lien de la maquette').fill(nouveauLien);
+  await fiche.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(fiche.getByText('Version 2')).toBeVisible();
+  await expect(fiche.getByRole('heading', { name: 'Écrans retravaillés' })).toBeVisible();
+  await expect(fiche.getByRole('link', { name: 'Ouvrir la maquette' })).toHaveAttribute('href', nouveauLien);
+
+  // Annuler ne change rien, Échap annule l'édition sans fermer la fiche.
+  await fiche.getByRole('button', { name: 'Modifier' }).click();
+  await fiche.getByLabel('Résumé du design en markdown').fill('Brouillon abandonné');
+  await page.keyboard.press('Escape');
+  await expect(fiche).toBeVisible();
+  await expect(fiche.getByLabel('Résumé du design en markdown')).toHaveCount(0);
+  await expect(fiche.getByText('Version 2')).toBeVisible();
+  await expect(fiche.getByText('Brouillon abandonné')).toHaveCount(0);
+
+  // La spec se corrige de la même façon.
+  await fiche.getByRole('tab', { name: 'Spec' }).click();
+  await expect(fiche.getByText('Version 1')).toBeVisible();
+  await fiche.getByRole('button', { name: 'Modifier' }).click();
+  await fiche.getByLabel('Spec en markdown').fill('# Spec revue à la main\n\nUne exigence de plus.');
+  await fiche.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(fiche.getByText('Version 2')).toBeVisible();
+  await expect(fiche.getByRole('heading', { name: 'Spec revue à la main' })).toBeVisible();
+
+  // Le journal garde la trace des deux corrections.
+  await fiche.getByRole('tab', { name: 'Journal' }).click();
+  await expect(fiche.getByText('Design modifié à la main (version 2).')).toBeVisible();
+  await expect(fiche.getByText('Spec modifiée à la main (version 2).')).toBeVisible();
+
+  // Le ticket n'a pas changé de colonne.
+  await fiche.getByRole('button', { name: 'Fermer' }).click();
+  await expect(colonne(page, 'En conception').getByRole('article', { name: titre })).toBeVisible();
+});

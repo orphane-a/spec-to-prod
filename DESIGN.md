@@ -41,5 +41,8 @@ Logo en trois points (encre, ambre, vert d'eau), titre Spec to prod, filtres par
 ## Qualité minimale
 Boutons réels, cibles de 44 px, focus clavier visible, contrastes de 4,5 pour 1, lisible jusqu'à la largeur d'un téléphone (le tableau défile horizontalement dans sa boîte). Les icônes sont des SVG au trait, jamais des emojis.
 
+## Corriger la spec et le design à la main
+Dans la fiche d'un ticket, les onglets Spec et Design portent un bouton contouré « Modifier », à droite de la ligne de version. Il remplace le texte par un éditeur markdown prérempli, avec « Annuler » (contouré) et « Enregistrer » (encre). Le design ajoute le champ « Lien de la maquette ». Le bouton n'apparaît qu'en conception et en dev, sans run en cours ; pendant un run, une phrase explique pourquoi. Échap annule l'édition sans fermer la fiche. Les erreurs du serveur s'affichent en rouge sous les champs, sans perdre le texte saisi.
+
 ## À prévoir ensuite
 Fiche d'un ticket (spec, scénarios de test, journal) et bandeau « Quota épuisé » avec l'heure de reprise estimée.
