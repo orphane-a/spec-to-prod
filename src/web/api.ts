@@ -62,6 +62,9 @@ export const api = {
   supprimer: (id: number) => requete<void>(`/api/tickets/${id}`, { method: 'DELETE' }),
   agir: (id: number, action: Action, corps?: unknown) =>
     requete<Ticket>(`/api/tickets/${id}/actions/${action}`, { method: 'POST', body: json(corps ?? {}) }),
+  corrigerSpec: (id: number, spec: string) => requete<Ticket>(`/api/tickets/${id}/spec`, { method: 'PATCH', body: json({ spec }) }),
+  corrigerDesign: (id: number, design: string, urlMaquette: string) =>
+    requete<Ticket>(`/api/tickets/${id}/design`, { method: 'PATCH', body: json({ design, urlMaquette }) }),
   marquerScenario: (id: number, ordre: number, fait: boolean) =>
     requete<Ticket>(`/api/tickets/${id}/scenarios/${ordre}`, { method: 'PATCH', body: json({ fait }) }),
 };
