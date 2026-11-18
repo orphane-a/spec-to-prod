@@ -14,6 +14,7 @@ const saisieSchema = z.object({
 });
 
 const idSchema = z.object({ id: z.coerce.number().int().positive() });
+const commentaireParamsSchema = idSchema.extend({ commentaireId: z.coerce.number().int().positive() });
 const scenarioParamsSchema = idSchema.extend({ ordre: z.coerce.number().int().positive() });
 
 const ACTIONS = {
@@ -59,6 +60,17 @@ export function enregistrerRoutesApi(app: FastifyInstance, service: ServiceTicke
   app.delete('/api/tickets/:id', async (requete, reponse) => {
     service.supprimer(idSchema.parse(requete.params).id);
     return reponse.code(204).send();
+  });
+
+  /** Commentaires : retours sur la spec, le design ou les tests. Ce ne sont pas des transitions. */
+  app.post('/api/tickets/:id/commentaires', async (requete, reponse) => {
+    const ticket = service.commenter(idSchema.parse(requete.params).id, requete.body);
+    return reponse.code(201).send(ticket);
+  });
+
+  app.delete('/api/tickets/:id/commentaires/:commentaireId', async (requete) => {
+    const { id, commentaireId } = commentaireParamsSchema.parse(requete.params);
+    return service.supprimerCommentaire(id, commentaireId);
   });
 
   app.get('/api/tickets/:id/journal', async (requete) => {

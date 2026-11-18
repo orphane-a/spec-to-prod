@@ -26,6 +26,7 @@ export function ticket(partiel: Partial<Ticket> = {}): Ticket {
     controles: { ...CONTROLES_INITIAUX },
     etapesDeploiement: { ...ETAPES_INITIALES },
     scenarios: [],
+    commentaires: [],
     urlPreprod: null,
     versionDeployee: null,
     deployeLe: null,

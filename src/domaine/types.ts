@@ -38,6 +38,19 @@ export interface Scenario extends ScenarioSaisie {
   fait: boolean;
 }
 
+export const SUJETS_COMMENTAIRE = ['general', 'spec', 'design', 'tests'] as const;
+export type SujetCommentaire = (typeof SUJETS_COMMENTAIRE)[number];
+
+/** Retour de l'utilisatrice sur un ticket, transmis à Claude au prochain run concerné. */
+export interface Commentaire {
+  id: number;
+  sujet: SujetCommentaire;
+  texte: string;
+  creeLe: string;
+  /** Date de transmission à une session Claude. Null tant qu'il attend. */
+  prisEnCompteLe: string | null;
+}
+
 export type CauseBlocage = 'echec' | 'quota' | 'iterations';
 
 export interface Blocage {
@@ -68,6 +81,7 @@ export interface Ticket {
   controles: ControlesDev;
   etapesDeploiement: EtapesDeploiement;
   scenarios: Scenario[];
+  commentaires: Commentaire[];
   urlPreprod: string | null;
   versionDeployee: string | null;
   deployeLe: string | null;
@@ -120,7 +134,7 @@ export const TYPES_EVENEMENT = [
   'RELANCER',
 ] as const satisfies readonly TypeEvenement[];
 
-export type TypeJournal = 'transition' | 'action' | 'iteration' | 'test' | 'blocage' | 'deblocage' | 'deploiement' | 'spec' | 'design';
+export type TypeJournal = 'transition' | 'action' | 'iteration' | 'test' | 'blocage' | 'deblocage' | 'deploiement' | 'spec' | 'design' | 'commentaire';
 
 export interface EntreeJournal {
   type: TypeJournal;
