@@ -22,14 +22,15 @@ Champs utiles : `runId`, `ticket.id`, `ticket.titre`, `ticket.spec`, `ticket.bra
    - les états utiles : vide, chargement, erreur, succès ;
    - une version téléphone (largeur 375 pixels) en plus de la version ordinateur ;
    - des textes réels en français, en phrases simples, sans tirets longs ni majuscules d'étiquettes.
-4. Publie ou mets à jour la maquette comme artefact sur claude.ai, avec l'outil Artifact. Fais le à chaque run, y compris quand la maquette existe déjà :
-   - prépare une copie de publication hors du dépôt (dans ton dossier temporaire) : retire `<!doctype html>`, les balises `<html>`, `<head>`, `<body>` et leurs fermetures, ainsi que les balises meta charset et viewport ; remplace le `<title>` par `Maquette ticket <ticket.id>` ; ne change rien d'autre ;
-   - cherche l'artefact existant du ticket : d'abord le lien noté dans `maquettes/ticket-<ticket.id>.artefact.txt` sur la branche, sinon un artefact intitulé `Maquette ticket <ticket.id>` dans la liste de tes artefacts (`action: "list"`, `limit: 200`) ;
-   - s'il existe, lis le (`action: "read"`) puis publie la copie avec son `url` pour le mettre à jour ; sinon publie la copie sans `url`, avec `icon: "layout"` et une `description` d'une phrase qui reprend le titre du ticket ;
-   - écris le lien de l'artefact, seul sur une ligne, dans `maquettes/ticket-<ticket.id>.artefact.txt`.
-   Si la publication échoue, continue sans artefact et écris « Artefact non publié : <raison> » dans le résumé. Ce n'est pas un échec du ticket.
-5. Commite la maquette et le fichier du lien avec le message « Ajoute la maquette du ticket <ticket.id> » (ou « Met à jour la maquette du ticket <ticket.id> » si elle existait déjà) et pousse la branche. Ne fusionne rien, n'ouvre pas de pull request.
-6. Rédige un résumé markdown du design : écrans, composants, états, textes clés, choix notables. Il sert de référence à la session de dev. Commence le par une ligne « Maquette en ligne : <lien de l'artefact> ».
+4. Reporte le design dans le canevas de maquette du projet sur claude.ai, avec l'outil Artifact. Fais le à chaque run. Tu modifies les écrans existants du canevas, tu n'en crées pas de nouveaux et tu ne publies jamais d'artefact séparé :
+   - canevas par projet : `orphane-a/elections2027` : https://claude.ai/artifact/FusvNjp1Um8tSadTivxvtm (Maquette Comparateur 2027). Pour un autre projet, cherche dans tes artefacts (`action: "list"`) un canevas de type Design dont le titre contient le nom du projet ; si tu n'en trouves pas, passe cette étape et écris « Canevas non mis à jour : aucun canevas trouvé » dans le résumé ;
+   - suis les instructions du type Design que renvoie la lecture du canevas : liste ses fichiers, lis `project/canvas.json`, puis les plans de travail concernés par la spec (par exemple `Main.dc.html` pour l'accueil) ;
+   - modifie seulement les parties de ces plans de travail que la spec change, avec les mêmes styles que le reste du canevas. Un plan de travail mobile qui importe un plan de travail ordinateur suit tout seul ;
+   - crée un nouveau plan de travail seulement si la spec ajoute une page qui n'existe pas encore dans le canevas ;
+   - publie avec le `url` du canevas, le dossier des fichiers en `root` et un `label` « Ticket <ticket.id> : <titre court> ».
+   Si la publication échoue, continue et écris « Canevas non mis à jour : <raison> » dans le résumé. Ce n'est pas un échec du ticket.
+5. Commite la maquette avec le message « Ajoute la maquette du ticket <ticket.id> » (ou « Met à jour la maquette du ticket <ticket.id> » si elle existait déjà) et pousse la branche. Ne fusionne rien, n'ouvre pas de pull request.
+6. Rédige un résumé markdown du design : écrans, composants, états, textes clés, choix notables. Il sert de référence à la session de dev. Commence le par une ligne « Canevas mis à jour : <lien du canevas>, plans de travail <noms> ».
 7. Signale le design au kanban avec l'événement `DESIGN_PRET`. Le lien de la maquette est `https://github.com/<projet.depot>/blob/<ticket.branche>/maquettes/ticket-<ticket.id>.html`.
 
 Si la spec manque ou si tu ne peux pas pousser la branche, signale `ECHEC` avec un motif court et clair en français.
