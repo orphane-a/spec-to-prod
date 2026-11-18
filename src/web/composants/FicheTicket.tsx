@@ -4,10 +4,11 @@ import { marked } from 'marked';
 import { definitionColonne } from '../../domaine/colonnes';
 import { refusCorrection } from '../../domaine/correction-manuelle';
 import { estModifiable, estSupprimable } from '../../domaine/machine-etats';
-import type { EvenementJournal, Ticket } from '../../domaine/types';
+import type { EvenementJournal, SujetCommentaire, Ticket } from '../../domaine/types';
 import { api } from '../api';
 import { formaterHeure, formaterHorodatage } from '../format';
 import type { OngletFiche } from './Carte';
+import { Commentaires } from './Commentaires';
 import { EditeurCorrection } from './EditeurCorrection';
 import { Fenetre } from './Fenetre';
 
@@ -26,11 +27,26 @@ const ONGLETS: { id: OngletFiche; libelle: string }[] = [
   { id: 'spec', libelle: 'Spec' },
   { id: 'design', libelle: 'Design' },
   { id: 'scenarios', libelle: 'Scénarios' },
+  { id: 'commentaires', libelle: 'Commentaires' },
   { id: 'journal', libelle: 'Journal' },
 ];
 
 export function FicheTicket({ ticket, projet, ongletInitial, fermer, modifier, supprimer, remplacer }: Props) {
   const [onglet, setOnglet] = useState<OngletFiche>(ongletInitial);
+  const [sujet, setSujet] = useState<SujetCommentaire>('general');
+  const enAttente = ticket.commentaires.filter((c) => c.prisEnCompteLe === null).length;
+
+  // Sur téléphone la barre d'onglets défile : l'onglet actif reste visible.
+  useEffect(() => {
+    document.getElementById(`onglet-${onglet}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [onglet]);
+
+  // Bouton Commenter des onglets Spec, Design et Scénarios : ouvre les commentaires sur le bon sujet.
+  function commenterSur(s: SujetCommentaire) {
+    setSujet(s);
+    setOnglet('commentaires');
+    requestAnimationFrame(() => document.getElementById('nouveau-commentaire')?.focus());
+  }
 
   return (
     <Fenetre titre={ticket.titre} fermer={fermer} variante="panneau">
@@ -68,15 +84,21 @@ export function FicheTicket({ ticket, projet, ongletInitial, fermer, modifier, s
             }}
           >
             {o.libelle}
+            {o.id === 'commentaires' && enAttente > 0 && (
+              <span className="compteur" aria-label={`, ${enAttente} en attente`}>
+                {enAttente}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
       <div role="tabpanel" id={`panneau-${onglet}`} aria-labelledby={`onglet-${onglet}`} className="section">
         {onglet === 'description' && <Description ticket={ticket} modifier={modifier} supprimer={supprimer} />}
-        {onglet === 'spec' && <Spec ticket={ticket} remplacer={remplacer} />}
-        {onglet === 'design' && <Design ticket={ticket} remplacer={remplacer} />}
-        {onglet === 'scenarios' && <Scenarios ticket={ticket} remplacer={remplacer} />}
+        {onglet === 'spec' && <Spec ticket={ticket} remplacer={remplacer} commenter={() => commenterSur('spec')} />}
+        {onglet === 'design' && <Design ticket={ticket} remplacer={remplacer} commenter={() => commenterSur('design')} />}
+        {onglet === 'scenarios' && <Scenarios ticket={ticket} remplacer={remplacer} commenter={() => commenterSur('tests')} />}
+        {onglet === 'commentaires' && <Commentaires ticket={ticket} sujetInitial={sujet} remplacer={remplacer} />}
         {onglet === 'journal' && <Journal ticket={ticket} />}
       </div>
     </Fenetre>
@@ -143,7 +165,7 @@ function useCorrection(ticket: Ticket) {
   return { edition: edition && refus === null, termine, boutonModifier };
 }
 
-function Spec({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticket) => void }) {
+function Spec({ ticket, remplacer, commenter }: { ticket: Ticket; remplacer: (t: Ticket) => void; commenter: () => void }) {
   const html = useMemo(() => (ticket.spec ? DOMPurify.sanitize(marked.parse(ticket.spec, { async: false })) : ''), [ticket.spec]);
   const { edition, termine, boutonModifier } = useCorrection(ticket);
 
@@ -152,7 +174,10 @@ function Spec({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticket) =>
     <>
       <div className="entete-bloc">
         {ticket.spec ? <p className="texte-petit">Version {ticket.specVersion}</p> : <span />}
-        {boutonModifier}
+        <div className="boutons-bloc">
+          <BoutonCommenter commenter={commenter} />
+          {boutonModifier}
+        </div>
       </div>
       {ticket.spec ? (
         <div className="spec" dangerouslySetInnerHTML={{ __html: html }} />
@@ -176,7 +201,7 @@ function apercuPossible(url: string): boolean {
   }
 }
 
-function Design({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticket) => void }) {
+function Design({ ticket, remplacer, commenter }: { ticket: Ticket; remplacer: (t: Ticket) => void; commenter: () => void }) {
   const html = useMemo(() => (ticket.design ? DOMPurify.sanitize(marked.parse(ticket.design, { async: false })) : ''), [ticket.design]);
   const { edition, termine, boutonModifier } = useCorrection(ticket);
   // La version dans l'adresse recharge l'aperçu quand Claude livre un nouveau design.
@@ -187,7 +212,10 @@ function Design({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticket) 
     <>
       <div className="entete-bloc">
         {ticket.design ? <p className="texte-petit">Version {ticket.designVersion}</p> : <span />}
-        {boutonModifier}
+        <div className="boutons-bloc">
+          <BoutonCommenter commenter={commenter} />
+          {boutonModifier}
+        </div>
       </div>
       {ticket.design ? (
         <>
@@ -229,7 +257,7 @@ function Design({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticket) 
   );
 }
 
-function Scenarios({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticket) => void }) {
+function Scenarios({ ticket, remplacer, commenter }: { ticket: Ticket; remplacer: (t: Ticket) => void; commenter: () => void }) {
   const [erreur, setErreur] = useState<string | null>(null);
   // Valeurs affichées tout de suite, en attendant la réponse du serveur.
   const [enAttente, setEnAttente] = useState<Record<number, boolean>>({});
@@ -257,15 +285,20 @@ function Scenarios({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticke
 
   return (
     <>
-      {ticket.urlPreprod && (
-        <p style={{ marginTop: 0 }}>
-          À tester sur{' '}
-          <a href={ticket.urlPreprod} target="_blank" rel="noreferrer noopener">
-            la préprod
-          </a>
-          .
-        </p>
-      )}
+      <div className="entete-bloc">
+        {ticket.urlPreprod ? (
+          <p style={{ margin: 0 }}>
+            À tester sur{' '}
+            <a href={ticket.urlPreprod} target="_blank" rel="noreferrer noopener">
+              la préprod
+            </a>
+            .
+          </p>
+        ) : (
+          <span />
+        )}
+        <BoutonCommenter commenter={commenter} />
+      </div>
       {erreur && (
         <p className="message-erreur" role="alert">
           {erreur}
@@ -286,6 +319,14 @@ function Scenarios({ ticket, remplacer }: { ticket: Ticket; remplacer: (t: Ticke
         ))}
       </ul>
     </>
+  );
+}
+
+function BoutonCommenter({ commenter }: { commenter: () => void }) {
+  return (
+    <button type="button" className="bouton bouton-contour" onClick={commenter}>
+      Commenter
+    </button>
   );
 }
 

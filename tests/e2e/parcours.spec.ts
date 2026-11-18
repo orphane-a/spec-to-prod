@@ -231,3 +231,34 @@ test('la spec et le design se corrigent à la main depuis la fiche, sans changer
   await fiche.getByRole('button', { name: 'Fermer' }).click();
   await expect(colonne(page, 'En conception').getByRole('article', { name: titre })).toBeVisible();
 });
+
+test('un commentaire sur la spec attend le prochain run, puis il est transmis à Claude', async ({ page }) => {
+  await page.goto('/');
+  const titre = 'Commentaires sur la spec';
+  const carte = await ajouterTicket(page, titre, 'Un retour avant la rédaction de la spec.');
+
+  await carte.getByRole('button', { name: titre }).click();
+  const fiche = page.getByRole('dialog', { name: titre });
+  await fiche.getByRole('tab', { name: /^Commentaires/ }).click();
+  await expect(fiche.getByText('Aucun commentaire pour l’instant.')).toBeVisible();
+
+  // Le bouton reste inactif tant que le champ est vide.
+  await expect(fiche.getByRole('button', { name: 'Envoyer' })).toBeDisabled();
+  await fiche.getByLabel('Sujet').selectOption({ label: 'Spec' });
+  await fiche.getByLabel('Ton commentaire').fill('Prévoir le cas des bénévoles sans email.');
+  await fiche.getByLabel('Ton commentaire').press('Control+Enter');
+  await expect(fiche.getByText('Prévoir le cas des bénévoles sans email.')).toBeVisible();
+  await expect(fiche.getByText('En attente du prochain run')).toBeVisible();
+  await expect(fiche.getByLabel('Ton commentaire')).toHaveValue('');
+  await fiche.getByRole('button', { name: 'Fermer' }).click();
+
+  await carte.getByRole('button', { name: 'Lancer la conception' }).click();
+  const enConception = colonne(page, 'En conception').getByRole('article', { name: titre });
+  await enConception.getByRole('button', { name: titre }).click();
+  await fiche.getByRole('tab', { name: /^Commentaires/ }).click();
+  await expect(fiche.getByText(/^Transmis à Claude le/)).toBeVisible();
+  await expect(fiche.getByRole('button', { name: 'Supprimer' })).toHaveCount(0);
+
+  await fiche.getByRole('tab', { name: 'Journal' }).click();
+  await expect(fiche.getByText('1 commentaire transmis à Claude.')).toBeVisible();
+});

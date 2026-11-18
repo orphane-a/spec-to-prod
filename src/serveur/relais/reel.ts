@@ -1,4 +1,5 @@
 import type { Projet } from '../base/depots';
+import { commentairesATransmettre } from '../../domaine/commentaires';
 import { SOURCES } from './webhooks';
 import { QuotaAtteintErreur, type DemandeRun, type Executeur, type ReponseLancement } from './executeur';
 
@@ -32,9 +33,9 @@ export const VERSION_ANTHROPIC = '2023-06-01';
 export const BETA_ROUTINES = 'experimental-cc-routine-2026-04-01';
 
 const CONSIGNES: Record<EtapeClaude, string> = {
-  spec: 'Rédige la spec du ticket en markdown, en français, puis signale SPEC_PRETE.',
-  design: 'Conçois la maquette HTML du ticket à partir de sa spec, commite la sur la branche du ticket, puis signale DESIGN_PRET.',
-  dev: 'Développe le ticket sur sa branche à partir de la spec et de la maquette, avec la boucle de tests, puis signale DEV_TERMINE.',
+  spec: 'Rédige la spec du ticket en markdown, en français, en tenant compte de ses commentaires, puis signale SPEC_PRETE.',
+  design: 'Conçois la maquette HTML du ticket à partir de sa spec et de ses commentaires, commite la sur la branche du ticket, puis signale DESIGN_PRET.',
+  dev: 'Développe le ticket sur sa branche à partir de la spec, de la maquette et de ses commentaires, avec la boucle de tests, puis signale DEV_TERMINE.',
 };
 
 /** Charge utile transmise à la session. Elle est lue comme une donnée par le prompt enregistré de la tâche. */
@@ -51,6 +52,8 @@ export function construireCharge({ run, ticket, projet }: DemandeRun, urlRelais:
       description: ticket.description,
       branche: ticket.branche,
       ...(etape !== 'spec' ? { spec: ticket.spec } : {}),
+      // Retours de l'utilisatrice encore en attente pour cette étape.
+      commentaires: commentairesATransmettre(ticket, etape).map(({ sujet, texte, creeLe }) => ({ sujet, texte, le: creeLe })),
       ...(etape === 'dev' ? { design: ticket.design, urlMaquette: ticket.urlMaquette, iterationMax: ticket.iterationMax } : {}),
     },
     projet: { nom: projet!.nom, depot: projet!.depot, urlPreprod: projet!.urlPreprod },

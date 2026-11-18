@@ -1,7 +1,8 @@
 import type { ZodType } from 'zod';
+import { commentaireSaisieSchema, commentairesATransmettre, detailJournalAjout, detailJournalTransmission } from '../domaine/commentaires';
 import { correctionDesignSchema, correctionSpecSchema, detailJournalDesign, detailJournalSpec, refusCorrection } from '../domaine/correction-manuelle';
 import { estModifiable, estSupprimable, transition } from '../domaine/machine-etats';
-import type { Acteur, Effet, Evenement, Ticket } from '../domaine/types';
+import type { Acteur, Commentaire, Effet, Evenement, Ticket } from '../domaine/types';
 import type { Depots, SaisieTicket } from './base/depots';
 import type { Diffuseur } from './diffuseur';
 import { ErreurMetier, introuvable } from './erreurs';
@@ -18,6 +19,12 @@ function validerCorrection<T>(schema: ZodType<T>, corps: unknown): T {
   }
   return resultat.data;
 }
+
+const MESSAGE_CORRECTION_TROP_LONGUE = 'La spec et le design réunis sont trop longs pour la session de dev. Raccourcis le texte.';
+
+/** Commentaires en attente, sous la forme où ils partent dans la charge de la session. */
+const enAttente = (commentaires: Commentaire[]) =>
+  commentaires.filter((c) => c.prisEnCompteLe === null).map(({ sujet, texte, creeLe }) => ({ sujet, texte, le: creeLe }));
 
 export type Horloge = () => string;
 export const horlogeSysteme: Horloge = () => new Date().toISOString();
@@ -98,7 +105,7 @@ export class ServiceTickets {
   corrigerSpec(id: number, corps: unknown): Ticket {
     const ticket = this.lirePourCorrection(id);
     const { spec } = validerCorrection(correctionSpecSchema, corps);
-    this.verifierTailleCharge({ spec, design: ticket.design, urlMaquette: ticket.urlMaquette });
+    this.verifierTailleCharge({ spec, design: ticket.design, urlMaquette: ticket.urlMaquette, commentaires: enAttente(ticket.commentaires) }, MESSAGE_CORRECTION_TROP_LONGUE);
     const version = ticket.specVersion + 1;
     const corrige = this.depots.tickets.corrigerSpec(id, spec, version, this.horloge(), { type: 'spec', detail: detailJournalSpec(version) });
     this.diffuseur.publier({ type: 'ticket', ticket: corrige });
@@ -109,11 +116,42 @@ export class ServiceTickets {
   corrigerDesign(id: number, corps: unknown): Ticket {
     const ticket = this.lirePourCorrection(id);
     const { design, urlMaquette } = validerCorrection(correctionDesignSchema, corps);
-    this.verifierTailleCharge({ spec: ticket.spec, design, urlMaquette });
+    this.verifierTailleCharge({ spec: ticket.spec, design, urlMaquette, commentaires: enAttente(ticket.commentaires) }, MESSAGE_CORRECTION_TROP_LONGUE);
     const version = ticket.designVersion + 1;
     const corrige = this.depots.tickets.corrigerDesign(id, design, urlMaquette, version, this.horloge(), { type: 'design', detail: detailJournalDesign(version) });
     this.diffuseur.publier({ type: 'ticket', ticket: corrige });
     return corrige;
+  }
+
+  /**
+   * Commentaire sur le ticket. Ce n'est pas une transition : il est permis dans toutes les colonnes,
+   * même pendant un run ou quand le ticket est Bloqué, et il attend le prochain run Claude qui le concerne.
+   */
+  commenter(id: number, corps: unknown): Ticket {
+    const ticket = this.lire(id);
+    const { sujet, texte } = validerCorrection(commentaireSaisieSchema, corps);
+    const maintenant = this.horloge();
+    const nouveau: Commentaire = { id: 0, sujet, texte, creeLe: maintenant, prisEnCompteLe: null };
+    this.verifierTailleCharge(
+      { spec: ticket.spec, design: ticket.design, urlMaquette: ticket.urlMaquette, commentaires: enAttente([...ticket.commentaires, nouveau]) },
+      'Les commentaires en attente sont trop longs pour la session Claude. Raccourcis ton commentaire.',
+    );
+    const commente = this.depots.tickets.ajouterCommentaire(id, sujet, texte, maintenant, { type: 'commentaire', detail: detailJournalAjout(sujet) });
+    this.diffuseur.publier({ type: 'ticket', ticket: commente });
+    return commente;
+  }
+
+  /** Retire un commentaire tant qu'il n'a pas été transmis à Claude. */
+  supprimerCommentaire(id: number, commentaireId: number): Ticket {
+    const ticket = this.lire(id);
+    const commentaire = ticket.commentaires.find((c) => c.id === commentaireId);
+    if (!commentaire) throw introuvable('Commentaire');
+    if (commentaire.prisEnCompteLe !== null) {
+      throw new ErreurMetier(409, 'COMMENTAIRE_TRANSMIS', 'Ce commentaire a déjà été transmis à Claude, il ne se supprime plus.');
+    }
+    const misAJour = this.depots.tickets.supprimerCommentaire(id, commentaireId, this.horloge(), { type: 'commentaire', detail: 'Commentaire supprimé.' });
+    this.diffuseur.publier({ type: 'ticket', ticket: misAJour });
+    return misAJour;
   }
 
   /** Action déclenchée par l'utilisatrice depuis l'interface. */
@@ -188,6 +226,17 @@ export class ServiceTickets {
     try {
       const projet = ticket.projetId === null ? null : this.depots.projets.lire(ticket.projetId);
       const reponse = await executeur.lancer({ run, ticket, projet });
+      // Seul un lancement accepté consomme les commentaires : un échec les laisse en attente pour la relance.
+      const transmis = executeur === this.executeurs.claude ? commentairesATransmettre(ticket, effet.run) : [];
+      if (transmis.length > 0) {
+        this.depots.tickets.marquerCommentairesTransmis(
+          ticket.id,
+          transmis.map((c) => c.id),
+          maintenant,
+          { type: 'commentaire', detail: detailJournalTransmission(transmis.length) },
+        );
+        this.diffuseur.publier({ type: 'ticket', ticket: this.lire(ticket.id) });
+      }
       if (reponse.urlSession) {
         this.depots.runs.definirSession(run.id, reponse.urlSession);
         const suivi = executeur === this.executeurs.claude ? `Session Claude démarrée : ${reponse.urlSession}` : `Pipeline lancé, suivi sur ${reponse.urlSession}`;
@@ -229,9 +278,12 @@ export class ServiceTickets {
    * Le relais refuse une demande trop grosse pour la tâche cloud. On refuse donc dès l'enregistrement
    * un texte que la session de dev ne pourrait pas recevoir, en gardant de la marge pour le reste de la charge.
    */
-  private verifierTailleCharge(textes: { spec: string | null; design: string | null; urlMaquette: string | null }): void {
+  private verifierTailleCharge(
+    textes: { spec: string | null; design: string | null; urlMaquette: string | null; commentaires: unknown[] },
+    message: string,
+  ): void {
     if (JSON.stringify(textes, null, 2).length > TAILLE_MAX_TEXTE - MARGE_CHARGE) {
-      throw new ErreurMetier(400, 'TEXTE_TROP_LONG', 'La spec et le design réunis sont trop longs pour la session de dev. Raccourcis le texte.');
+      throw new ErreurMetier(400, 'TEXTE_TROP_LONG', message);
     }
   }
 

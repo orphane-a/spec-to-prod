@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CONTROLES_INITIAUX, ETAPES_INITIALES } from '../../domaine/colonnes';
-import type { CauseBlocage, Colonne, EntreeJournal, EvenementJournal, Ticket, TypeRun } from '../../domaine/types';
+import type { CauseBlocage, Colonne, Commentaire, SujetCommentaire, EntreeJournal, EvenementJournal, Ticket, TypeRun } from '../../domaine/types';
 import type { TicketImporte } from '../import/kanban-artefact';
 import { enTransaction, type Base } from './connexion';
 
@@ -45,7 +45,17 @@ export interface SaisieTicket {
 
 const texte = (v: unknown) => (v === null || v === undefined ? null : String(v));
 
-function versTicket(l: Ligne, scenarios: Ligne[]): Ticket {
+function versCommentaire(c: Ligne): Commentaire {
+  return {
+    id: Number(c.id),
+    sujet: c.sujet as SujetCommentaire,
+    texte: String(c.texte),
+    creeLe: String(c.cree_le),
+    prisEnCompteLe: texte(c.pris_en_compte_le),
+  };
+}
+
+function versTicket(l: Ligne, scenarios: Ligne[], commentaires: Ligne[]): Ticket {
   return {
     id: Number(l.id),
     titre: String(l.titre),
@@ -78,6 +88,7 @@ function versTicket(l: Ligne, scenarios: Ligne[]): Ticket {
       resultatAttendu: String(s.resultat_attendu),
       fait: Number(s.fait) === 1,
     })),
+    commentaires: commentaires.map(versCommentaire),
     urlPreprod: texte(l.url_preprod),
     versionDeployee: texte(l.version_deployee),
     deployeLe: texte(l.deploye_le),
@@ -95,14 +106,22 @@ export class DepotTickets {
   lister(): Ticket[] {
     const lignes = this.base.prepare('SELECT * FROM tickets ORDER BY modifie_le DESC, id DESC').all() as Ligne[];
     const scenarios = this.base.prepare('SELECT * FROM scenarios ORDER BY ticket_id, ordre').all() as Ligne[];
-    return lignes.map((l) => versTicket(l, scenarios.filter((s) => s.ticket_id === l.id)));
+    const commentaires = this.base.prepare('SELECT * FROM commentaires ORDER BY ticket_id, id').all() as Ligne[];
+    return lignes.map((l) =>
+      versTicket(
+        l,
+        scenarios.filter((s) => s.ticket_id === l.id),
+        commentaires.filter((c) => c.ticket_id === l.id),
+      ),
+    );
   }
 
   lire(id: number): Ticket | null {
     const ligne = this.base.prepare('SELECT * FROM tickets WHERE id = ?').get(id) as Ligne | undefined;
     if (!ligne) return null;
     const scenarios = this.base.prepare('SELECT * FROM scenarios WHERE ticket_id = ? ORDER BY ordre').all(id) as Ligne[];
-    return versTicket(ligne, scenarios);
+    const commentaires = this.base.prepare('SELECT * FROM commentaires WHERE ticket_id = ? ORDER BY id').all(id) as Ligne[];
+    return versTicket(ligne, scenarios, commentaires);
   }
 
   creer(saisie: SaisieTicket, maintenant: string): Ticket {
@@ -243,6 +262,37 @@ export class DepotTickets {
         .run(design, urlMaquette, version, maintenant, id);
       this.journaliserSansTransaction(id, [journal], maintenant);
       return this.lire(id)!;
+    });
+  }
+
+  /** Ajoute un commentaire avec son entrée de journal. Le ticket est daté de cette activité. */
+  ajouterCommentaire(ticketId: number, sujet: SujetCommentaire, contenu: string, maintenant: string, journal: EntreeJournal): Ticket {
+    return enTransaction(this.base, () => {
+      this.base
+        .prepare('INSERT INTO commentaires (ticket_id, sujet, texte, cree_le) VALUES (?, ?, ?, ?)')
+        .run(ticketId, sujet, contenu, maintenant);
+      this.base.prepare('UPDATE tickets SET modifie_le = ? WHERE id = ?').run(maintenant, ticketId);
+      this.journaliserSansTransaction(ticketId, [journal], maintenant);
+      return this.lire(ticketId)!;
+    });
+  }
+
+  /** Supprime un commentaire du ticket, avec son entrée de journal. */
+  supprimerCommentaire(ticketId: number, commentaireId: number, maintenant: string, journal: EntreeJournal): Ticket {
+    return enTransaction(this.base, () => {
+      this.base.prepare('DELETE FROM commentaires WHERE id = ? AND ticket_id = ?').run(commentaireId, ticketId);
+      this.base.prepare('UPDATE tickets SET modifie_le = ? WHERE id = ?').run(maintenant, ticketId);
+      this.journaliserSansTransaction(ticketId, [journal], maintenant);
+      return this.lire(ticketId)!;
+    });
+  }
+
+  /** Note les commentaires comme transmis à une session Claude. Seuls ceux encore en attente changent. */
+  marquerCommentairesTransmis(ticketId: number, ids: number[], maintenant: string, journal: EntreeJournal): void {
+    enTransaction(this.base, () => {
+      const marque = this.base.prepare('UPDATE commentaires SET pris_en_compte_le = ? WHERE id = ? AND ticket_id = ? AND pris_en_compte_le IS NULL');
+      for (const id of ids) marque.run(maintenant, id, ticketId);
+      this.journaliserSansTransaction(ticketId, [journal], maintenant);
     });
   }
 

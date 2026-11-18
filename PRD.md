@@ -242,6 +242,17 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
   6. L'éditeur est un champ de texte simple, sans aperçu en direct. Changer d'onglet pendant une édition abandonne le brouillon, Échap l'annule sans fermer la fiche.
   7. L'API ne revient pas sur la règle de PATCH /api/tickets/:id : titre, description et projet restent modifiables seulement dans le backlog.
 
+- 💬 Commentaires d'un ticket (18 novembre 2026) : un onglet Commentaires dans la fiche pour faire des retours sur la spec, le design ou les tests. Ce n'est pas une transition : commenter ne change jamais la colonne, ne lance aucun run et ne touche pas à la machine à états. Valeurs par défaut retenues :
+  1. Chaque commentaire porte un sujet : général, spec, design ou tests. Le bouton Commenter des onglets Spec, Design et Scénarios ouvre les commentaires avec le bon sujet déjà choisi.
+  2. On commente dans toutes les colonnes, pendant un run et quand le ticket est Bloqué. Le texte ne peut pas être vide et fait 5 000 caractères au plus.
+  3. Les commentaires en attente partent avec le prochain run Claude qui les concerne : la spec reçoit les commentaires généraux et ceux sur la spec, le design y ajoute ceux sur le design, le dev les reçoit tous. Ils sont alors marqués « transmis à Claude » et le journal le note (« 2 commentaires transmis à Claude. »). Un commentaire n'est transmis qu'une fois.
+  4. Seul un lancement accepté par la tâche cloud consomme les commentaires : si /fire échoue, ils restent en attente pour la relance.
+  5. Commenter ne relance pas Claude. Un commentaire attend l'étape suivante ou une relance. Un retour sur les tests écrit en En test attend donc le retour vers En dev (exigence P1) ou une relance.
+  6. Un commentaire se supprime tant qu'il n'a pas été transmis. Il ne se modifie pas : on le supprime et on en écrit un autre.
+  7. Les commentaires en attente comptent dans la limite de taille de la demande à la tâche cloud, avec la spec et le design. Au delà, le serveur refuse le commentaire en 400.
+  8. Pour le dev, un commentaire qui contredit la spec l'emporte, et la session le signale dans son récapitulatif.
+  9. Les prompts de taches-cloud décrivent le champ ticket.commentaires : ils sont à recopier dans les tâches cloud sur claude.ai pour que Claude en tienne compte.
+
 **Décisions prises pour la connexion à Claude** 🔌
 
 - 🎨 Étape design : elle fait partie de En conception. La spec prête lance seule le design, mais il est facultatif : Lancer le dev exige seulement la spec. Un ticket avec une spec mais sans design propose Lancer le design et Lancer le dev.
