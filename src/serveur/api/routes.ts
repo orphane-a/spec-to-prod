@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Evenement } from '../../domaine/types';
 import type { Depots } from '../base/depots';
 import type { Diffuseur } from '../diffuseur';
+import { ErreurMaquette, POLITIQUE_MAQUETTE, pageErreurMaquette, type LecteurMaquette } from '../maquette';
 import { ErreurMetier } from '../erreurs';
 import type { ServiceTickets } from '../service-tickets';
 
@@ -28,7 +29,7 @@ const ACTIONS = {
 
 const actionSchema = idSchema.extend({ action: z.enum(Object.keys(ACTIONS) as [keyof typeof ACTIONS]) });
 
-export function enregistrerRoutesApi(app: FastifyInstance, service: ServiceTickets, depots: Depots, diffuseur: Diffuseur): void {
+export function enregistrerRoutesApi(app: FastifyInstance, service: ServiceTickets, depots: Depots, diffuseur: Diffuseur, lireMaquette: LecteurMaquette): void {
   app.get('/api/projets', async () => depots.projets.lister());
 
   app.get('/api/quota', async () => depots.quota.lire());
@@ -56,6 +57,28 @@ export function enregistrerRoutesApi(app: FastifyInstance, service: ServiceTicke
     const { id } = idSchema.parse(requete.params);
     service.lire(id);
     return depots.tickets.journal(id);
+  });
+
+  /** Maquette du ticket, servie isolée pour s'afficher dans la fiche. */
+  app.get('/api/tickets/:id/maquette', async (requete, reponse) => {
+    const ticket = service.lire(idSchema.parse(requete.params).id);
+    let html: string;
+    let statut = 200;
+    try {
+      html = await lireMaquette(ticket);
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurMaquette)) requete.log.error(erreur);
+      html = pageErreurMaquette(erreur instanceof ErreurMaquette ? erreur.message : 'Une erreur inattendue est survenue.');
+      statut = 502;
+    }
+    return reponse
+      .code(statut)
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Content-Security-Policy', POLITIQUE_MAQUETTE)
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Referrer-Policy', 'no-referrer')
+      .header('Cache-Control', 'private, no-store')
+      .send(html);
   });
 
   app.post('/api/tickets/:id/actions/:action', async (requete) => {

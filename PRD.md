@@ -238,6 +238,7 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
 
 - 🎨 Étape design : elle fait partie de En conception. La spec prête lance seule le design, mais il est facultatif : Lancer le dev exige seulement la spec. Un ticket avec une spec mais sans design propose Lancer le design et Lancer le dev.
 - 🖼️ Livrable du design : une maquette HTML autonome commitée sur la branche du ticket (maquettes/ticket-identifiant.html), plus un résumé markdown dans le ticket.
+- 👀 Affichage de la maquette : Voir le design ouvre l'onglet Design, qui affiche la maquette elle même dans un cadre, au dessus du résumé, avec un lien plein écran et un lien vers le fichier source. Le serveur lit le fichier sur GitHub avec son jeton (droit Contents en lecture en plus de Actions) et le sert isolé : aucun accès au tableau ni au réseau. 18 novembre 2026.
 - 🌿 La branche est donc fixée dès Lancer la conception, et non plus au lancement du dev.
 - 🧩 Une tâche cloud par étape (spec, design, dev), chacune avec son URL /fire et son jeton dans le fichier .env du serveur. Les prompts sont versionnés dans taches-cloud.
 - ⏳ Réponse 429 de /fire : le ticket passe en Bloqué avec « Quota Claude atteint » et l'heure de reprise tirée de Retry-After. L'endpoint ne distingue pas la limite de lancements du quota d'abonnement.

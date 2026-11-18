@@ -1,6 +1,7 @@
 import { creerApp } from './app';
 import { lireConfig } from './config';
 import { creerExecuteurs, envoyerParHttp } from './relais/fabrique';
+import { creerLecteurMaquette } from './maquette';
 
 // Charge .env s'il existe. Les secrets restent côté serveur.
 try {
@@ -19,7 +20,7 @@ try {
 
 let journaliser: (message: string) => void = console.warn;
 const { executeurs, arreter } = creerExecuteurs(config, envoyerParHttp(`http://127.0.0.1:${config.PORT}`, config.WEBHOOK_SECRET), (m) => journaliser(m));
-const { serveur, service } = creerApp({ config, executeurs, journalisation: true });
+const { serveur, service } = creerApp({ config, executeurs, journalisation: true, lireMaquette: creerLecteurMaquette({ jeton: config.GITHUB_JETON }) });
 journaliser = (m) => serveur.log.warn(m);
 
 // Une session silencieuse (quota épuisé en cours de route, plantage) bloque son ticket au lieu de le laisser tourner.

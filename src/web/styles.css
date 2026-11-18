@@ -825,6 +825,24 @@ dialog::backdrop {
   }
 }
 
+/* Aperçu de la maquette dans l'onglet Design. */
+.apercu-maquette {
+  display: block;
+  width: 100%;
+  height: 65vh;
+  min-height: 360px;
+  border: 1px solid var(--bordure-carte);
+  border-radius: 10px;
+  background: var(--blanc);
+}
+
+.liens-maquette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 8px 0 16px;
+}
+
 .panneau .fenetre-contenu {
   min-height: 100%;
 }
