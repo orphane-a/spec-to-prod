@@ -290,8 +290,15 @@ describe('une seule préprod par projet', () => {
     expect(refus.statusCode).toBe(409);
     expect(refus.json().message).toBe(`Préprod occupée par le ticket ${premier}.`);
 
-    // Le premier part en prod : la préprod est libre, la relance ne refait que la préprod.
+    // Le premier part en prod : la préprod reste réservée tant que main n'a pas reçu sa fusion.
     await agir(app, premier, 'deployer-prod', { confirmation: true });
+    const pendantLaProd = await agir(app, second, 'relancer');
+    expect(pendantLaProd.statusCode).toBe(409);
+    expect(pendantLaProd.json().message).toBe(`Préprod occupée par le ticket ${premier}.`);
+
+    // Le premier est en Done : la préprod est libre, la relance ne refait que la préprod.
+    await app.service.recevoir(app.deploiement.dernierRun().id, { type: 'DEPLOIEMENT_TERMINE', version: 'b2c3d4e' });
+    expect(app.service.lire(premier).colonne).toBe('done');
     const relance = await agir(app, second, 'relancer');
     expect(relance.json()).toMatchObject({ colonne: 'dev', runEnCours: 'preprod', blocage: null });
     expect(app.deploiement.dernierRun().type).toBe('preprod');

@@ -51,7 +51,8 @@ export interface Commentaire {
   prisEnCompteLe: string | null;
 }
 
-export type CauseBlocage = 'echec' | 'quota' | 'iterations';
+/** conflit : la branche du ticket ne se fusionne plus dans la branche principale, le dev doit la remettre à jour. */
+export type CauseBlocage = 'echec' | 'quota' | 'iterations' | 'conflit';
 
 export interface Blocage {
   motif: string;
@@ -110,7 +111,7 @@ export const evenementSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('DEPLOYER_PROD'), confirmation: z.boolean() }),
   z.object({ type: z.literal('ETAPE_DEPLOIEMENT'), etapes: etapesDeploiementSchema }),
   z.object({ type: z.literal('DEPLOIEMENT_TERMINE'), version: z.string() }),
-  z.object({ type: z.literal('ECHEC'), motif: z.string() }),
+  z.object({ type: z.literal('ECHEC'), motif: z.string(), conflit: z.boolean().optional() }),
   z.object({ type: z.literal('QUOTA_ATTEINT'), repriseEstimee: z.string().nullable() }),
   z.object({ type: z.literal('RELANCER') }),
 ]);

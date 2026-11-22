@@ -46,7 +46,9 @@ const REGLES: Record<TypeEvenement, Regle> = {
 const RUN_A_RELANCER: Partial<Record<Colonne, (ticket: Ticket) => TypeRun>> = {
   conception: (ticket) => (ticket.spec?.trim() ? 'design' : 'spec'),
   // Dev déjà au vert avec ses scénarios : seule la préprod repart.
-  dev: (ticket) => (ticket.scenarios.length >= SCENARIOS_MINIMUM && toutEstVert(ticket.controles) ? 'preprod' : 'dev'),
+  // Sauf en cas de conflit avec la branche principale : le dev remet la branche à jour.
+  dev: (ticket) =>
+    ticket.blocage?.cause !== 'conflit' && ticket.scenarios.length >= SCENARIOS_MINIMUM && toutEstVert(ticket.controles) ? 'preprod' : 'dev',
   deploiement: () => 'deploiement',
 };
 
@@ -249,7 +251,9 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
     case 'ECHEC': {
       if (!ticket.runEnCours) return condition('Aucun run en cours ne peut échouer.');
       const motif = evenement.motif.trim() || 'Étape en échec.';
-      return succes({ ...t, runEnCours: null, blocage: { motif, cause: 'echec', le: ctx.maintenant, repriseEstimee: null } }, [
+      // Seul un conflit en préprod renvoie au dev : en prod, le ticket ne quitte pas sa colonne.
+      const cause = evenement.conflit && ticket.runEnCours === 'preprod' ? 'conflit' : 'echec';
+      return succes({ ...t, runEnCours: null, blocage: { motif, cause, le: ctx.maintenant, repriseEstimee: null } }, [
         { type: 'blocage', detail: `Bloqué : ${motif}` },
       ]);
     }
