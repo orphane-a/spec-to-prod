@@ -262,3 +262,27 @@ test('un commentaire sur la spec attend le prochain run, puis il est transmis à
   await fiche.getByRole('tab', { name: 'Journal' }).click();
   await expect(fiche.getByText('1 commentaire transmis à Claude.')).toBeVisible();
 });
+
+test('en conception, un commentaire sur le design relance aussitôt le design', async ({ page }) => {
+  await page.goto('/');
+  const titre = 'Relance du design par un commentaire';
+  const carte = await ajouterTicket(page, titre, 'Un retour sur la maquette.');
+  await carte.getByRole('button', { name: 'Lancer la conception' }).click();
+  const enConception = colonne(page, 'En conception').getByRole('article', { name: titre });
+  await expect(enConception.getByText('Spec et maquette prêtes')).toBeVisible({ timeout: 15_000 });
+
+  await enConception.getByRole('button', { name: 'Voir le design' }).click();
+  const fiche = page.getByRole('dialog', { name: titre });
+  await expect(fiche.getByText('Version 1')).toBeVisible();
+  await fiche.getByRole('button', { name: 'Commenter' }).click();
+  await expect(fiche.getByLabel('Sujet')).toHaveValue('design');
+  await fiche.getByLabel('Ton commentaire').fill('Le bouton principal doit être plus visible.');
+  await fiche.getByRole('button', { name: 'Envoyer' }).click();
+  await expect(fiche.getByText(/^Transmis à Claude le/)).toBeVisible();
+
+  // Le mode simulé livre une nouvelle maquette : le design passe en version 2.
+  await fiche.getByRole('tab', { name: 'Design' }).click();
+  await expect(fiche.getByText('Version 2')).toBeVisible({ timeout: 15_000 });
+  await fiche.getByRole('tab', { name: 'Journal' }).click();
+  await expect(fiche.getByText('Claude retravaille le design avec vos commentaires.')).toBeVisible();
+});

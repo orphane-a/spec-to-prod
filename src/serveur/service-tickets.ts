@@ -1,5 +1,5 @@
 import type { ZodType } from 'zod';
-import { commentaireSaisieSchema, commentairesATransmettre, detailJournalAjout, detailJournalTransmission } from '../domaine/commentaires';
+import { commentaireSaisieSchema, commentairesATransmettre, detailJournalAjout, detailJournalTransmission, relanceParCommentaires } from '../domaine/commentaires';
 import { correctionDesignSchema, correctionSpecSchema, detailJournalDesign, detailJournalSpec, refusCorrection } from '../domaine/correction-manuelle';
 import { estModifiable, estSupprimable, transition } from '../domaine/machine-etats';
 import type { Acteur, Commentaire, Effet, Evenement, Ticket } from '../domaine/types';
@@ -127,7 +127,7 @@ export class ServiceTickets {
    * Commentaire sur le ticket. Ce n'est pas une transition : il est permis dans toutes les colonnes,
    * même pendant un run ou quand le ticket est Bloqué, et il attend le prochain run Claude qui le concerne.
    */
-  commenter(id: number, corps: unknown): Ticket {
+  async commenter(id: number, corps: unknown): Promise<Ticket> {
     const ticket = this.lire(id);
     const { sujet, texte } = validerCorrection(commentaireSaisieSchema, corps);
     const maintenant = this.horloge();
@@ -138,7 +138,7 @@ export class ServiceTickets {
     );
     const commente = this.depots.tickets.ajouterCommentaire(id, sujet, texte, maintenant, { type: 'commentaire', detail: detailJournalAjout(sujet) });
     this.diffuseur.publier({ type: 'ticket', ticket: commente });
-    return commente;
+    return this.relancerSiCommentaires(commente);
   }
 
   /** Retire un commentaire tant qu'il n'a pas été transmis à Claude. */
@@ -174,9 +174,11 @@ export class ServiceTickets {
     }
     this.depots.runs.signalerNouvelle(run.id, this.horloge());
     // Le run se clôt dès que le ticket le quitte, avant le démarrage de l'étape suivante (spec puis design).
-    const ticket = await this.appliquer(avant, evenement, 'systeme', (apres) => {
-      if (apres.runEnCours !== run.type) this.depots.runs.clore(run.id, apres.blocage ? 'echoue' : 'termine', apres.modifieLe);
+    const apres = await this.appliquer(avant, evenement, 'systeme', (suivant) => {
+      if (suivant.runEnCours !== run.type) this.depots.runs.clore(run.id, suivant.blocage ? 'echoue' : 'termine', suivant.modifieLe);
     });
+    // Des commentaires écrits pendant le run attendaient sa fin : l'étape concernée repart.
+    const ticket = await this.relancerSiCommentaires(apres);
     return { ignore: false, ticket };
   }
 
@@ -252,6 +254,15 @@ export class ServiceTickets {
       const courant = this.lire(ticket.id);
       return this.appliquer(courant, evenement, 'systeme');
     }
+  }
+
+  /**
+   * En conception, un commentaire sur la spec ou le design relance aussitôt l'étape concernée.
+   * C'est la décision de l'utilisatrice, exprimée par son commentaire : la machine à états la valide comme une action.
+   */
+  private async relancerSiCommentaires(ticket: Ticket): Promise<Ticket> {
+    const relance = relanceParCommentaires(ticket);
+    return relance ? this.appliquer(ticket, { type: relance }, 'utilisatrice') : ticket;
   }
 
   private marquerQuotaEpuise(repriseEstimee: string | null): void {

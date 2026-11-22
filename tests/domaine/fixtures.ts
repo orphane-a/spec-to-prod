@@ -62,6 +62,8 @@ export const EVENEMENTS: Record<TypeEvenement, Evenement> = {
   ECHEC: { type: 'ECHEC', motif: 'Le run a échoué.' },
   QUOTA_ATTEINT: { type: 'QUOTA_ATTEINT', repriseEstimee: '2026-11-17T15:00:00.000Z' },
   RELANCER: { type: 'RELANCER' },
+  RETRAVAILLER_SPEC: { type: 'RETRAVAILLER_SPEC' },
+  RETRAVAILLER_DESIGN: { type: 'RETRAVAILLER_DESIGN' },
 };
 
 /**

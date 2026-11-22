@@ -55,8 +55,8 @@ export function Commentaires({ ticket, sujetInitial, remplacer }: Props) {
   return (
     <div className="fenetre-contenu" style={{ padding: 0 }}>
       <p className="texte-petit" style={{ margin: 0 }}>
-        Tes commentaires partent avec le prochain run de Claude qui les concerne. La spec lit les commentaires généraux et ceux sur la spec, le design y
-        ajoute ceux sur le design, le dev les lit tous.
+        En conception, un commentaire général ou sur la spec relance aussitôt la spec, puis le design. Un commentaire sur le design relance le design. Si
+        Claude travaille déjà, il repart à la fin du run. Ailleurs, et sur un ticket bloqué, le commentaire attend le prochain run.
       </p>
 
       {ticket.commentaires.length === 0 ? (
