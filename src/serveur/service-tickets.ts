@@ -2,7 +2,7 @@ import type { ZodType } from 'zod';
 import { commentaireSaisieSchema, commentairesATransmettre, detailJournalAjout, detailJournalTransmission } from '../domaine/commentaires';
 import { correctionDesignSchema, correctionSpecSchema, detailJournalDesign, detailJournalSpec, refusCorrection } from '../domaine/correction-manuelle';
 import { estModifiable, estSupprimable, transition } from '../domaine/machine-etats';
-import type { Acteur, Commentaire, Effet, Evenement, Ticket } from '../domaine/types';
+import type { Acteur, Commentaire, Effet, Evenement, Nature, Ticket } from '../domaine/types';
 import type { Depots, SaisieTicket } from './base/depots';
 import type { Diffuseur } from './diffuseur';
 import { ErreurMetier, introuvable } from './erreurs';
@@ -28,6 +28,14 @@ const enAttente = (commentaires: Commentaire[]) =>
 
 export type Horloge = () => string;
 export const horlogeSysteme: Horloge = () => new Date().toISOString();
+
+/** Bugs ouverts qu'un même ticket peut signaler : au delà, l'agent de test s'emballe. */
+export const BUGS_OUVERTS_MAX = 10;
+
+export interface BugSignale {
+  titre: string;
+  description: string;
+}
 
 export type ResultatReception = { ignore: false; ticket: Ticket } | { ignore: true; raison: string };
 
@@ -57,20 +65,51 @@ export class ServiceTickets {
     this.verifierProjet(saisie.projetId);
     const maintenant = this.horloge();
     const ticket = this.depots.tickets.creer(saisie, maintenant);
-    this.depots.tickets.journaliser(ticket.id, [{ type: 'action', detail: 'Ticket ajouté au backlog.' }], maintenant);
+    const detail = saisie.nature === 'bug' ? 'Bug signalé, ajouté au backlog.' : 'Ticket ajouté au backlog.';
+    this.depots.tickets.journaliser(ticket.id, [{ type: 'action', detail }], maintenant);
     this.diffuseur.publier({ type: 'ticket', ticket });
     return ticket;
   }
 
-  modifier(id: number, saisie: SaisieTicket): Ticket {
+  modifier(id: number, saisie: Omit<SaisieTicket, 'nature'> & { nature?: Nature }): Ticket {
     const ticket = this.lire(id);
     if (!estModifiable(ticket)) throw new ErreurMetier(409, 'NON_MODIFIABLE', 'Seuls les tickets du backlog se modifient.');
     this.verifierProjet(saisie.projetId);
     const maintenant = this.horloge();
-    const modifie = this.depots.tickets.modifier(id, saisie, maintenant)!;
+    const modifie = this.depots.tickets.modifier(id, { ...saisie, nature: saisie.nature ?? ticket.nature }, maintenant)!;
     this.depots.tickets.journaliser(id, [{ type: 'action', detail: 'Ticket modifié.' }], maintenant);
     this.diffuseur.publier({ type: 'ticket', ticket: modifie });
     return modifie;
+  }
+
+  /**
+   * Bug hors périmètre trouvé par l'agent de test exploratoire pendant un dev.
+   * Il arrive dans le backlog du même projet et ne démarre jamais seul : la correction reste une décision manuelle.
+   * Un doublon (même titre, même ticket d'origine) renvoie le bug déjà créé, car le script de signalement réessaie.
+   */
+  signalerBug(runId: string, bug: BugSignale): { ticket: Ticket; nouveau: boolean } {
+    const run = this.depots.runs.lire(runId);
+    if (!run) throw introuvable('Run');
+    if (run.type !== 'dev' || run.statut !== 'en_cours') {
+      throw new ErreurMetier(409, 'RUN_INACTIF', 'Seule une session de dev en cours peut signaler un bug.');
+    }
+    const source = this.lire(run.ticketId);
+    const existants = this.depots.tickets.lister().filter((t) => t.trouveSur === source.id);
+    const doublon = existants.find((t) => t.titre === bug.titre);
+    if (doublon) return { ticket: doublon, nouveau: false };
+    if (existants.filter((t) => t.colonne !== 'done').length >= BUGS_OUVERTS_MAX) {
+      throw new ErreurMetier(429, 'TROP_DE_BUGS', `Ce ticket a déjà ${BUGS_OUVERTS_MAX} bugs ouverts signalés par l’agent de test.`);
+    }
+    const maintenant = this.horloge();
+    const ticket = this.depots.tickets.creer({ ...bug, projetId: source.projetId, nature: 'bug' }, maintenant, { origine: 'agent', trouveSur: source.id });
+    this.depots.tickets.journaliser(ticket.id, [{ type: 'action', detail: `Bug trouvé par l’agent de test pendant le dev de « ${source.titre} ».` }], maintenant);
+    this.depots.tickets.journaliser(
+      source.id,
+      [{ type: 'test', detail: `L’agent de test a signalé un bug hors du périmètre : « ${ticket.titre} » (ticket ${ticket.id}).` }],
+      maintenant,
+    );
+    this.diffuseur.publier({ type: 'ticket', ticket });
+    return { ticket, nouveau: true };
   }
 
   supprimer(id: number): void {

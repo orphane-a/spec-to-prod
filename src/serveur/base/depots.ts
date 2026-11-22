@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CONTROLES_INITIAUX, ETAPES_INITIALES } from '../../domaine/colonnes';
-import type { CauseBlocage, Colonne, Commentaire, SujetCommentaire, EntreeJournal, EvenementJournal, Ticket, TypeRun } from '../../domaine/types';
+import type { CauseBlocage, Colonne, Commentaire, Nature, Origine, SujetCommentaire, EntreeJournal, EvenementJournal, Ticket, TypeRun } from '../../domaine/types';
 import type { TicketImporte } from '../import/kanban-artefact';
 import { enTransaction, type Base } from './connexion';
 
@@ -41,6 +41,13 @@ export interface SaisieTicket {
   titre: string;
   description: string;
   projetId: number | null;
+  nature: Nature;
+}
+
+/** Provenance d'un ticket créé : fixée à la création, jamais modifiée ensuite. */
+export interface Provenance {
+  origine: Origine;
+  trouveSur: number | null;
 }
 
 const texte = (v: unknown) => (v === null || v === undefined ? null : String(v));
@@ -61,6 +68,9 @@ function versTicket(l: Ligne, scenarios: Ligne[], commentaires: Ligne[]): Ticket
     titre: String(l.titre),
     description: String(l.description),
     projetId: l.projet_id === null ? null : Number(l.projet_id),
+    nature: l.nature as Nature,
+    origine: l.origine as Origine,
+    trouveSur: l.trouve_sur === null ? null : Number(l.trouve_sur),
     colonne: l.colonne as Colonne,
     blocage: l.bloque_motif
       ? {
@@ -124,13 +134,25 @@ export class DepotTickets {
     return versTicket(ligne, scenarios, commentaires);
   }
 
-  creer(saisie: SaisieTicket, maintenant: string): Ticket {
+  creer(saisie: SaisieTicket, maintenant: string, provenance: Provenance = { origine: 'utilisatrice', trouveSur: null }): Ticket {
     const { lastInsertRowid } = this.base
       .prepare(
-        `INSERT INTO tickets (titre, description, projet_id, colonne, iteration_max, controles_dev, etapes_deploiement, cree_le, modifie_le)
-         VALUES (?, ?, ?, 'backlog', ?, ?, ?, ?, ?)`,
+        `INSERT INTO tickets (titre, description, projet_id, nature, origine, trouve_sur, colonne, iteration_max, controles_dev, etapes_deploiement, cree_le, modifie_le)
+         VALUES (?, ?, ?, ?, ?, ?, 'backlog', ?, ?, ?, ?, ?)`,
       )
-      .run(saisie.titre, saisie.description, saisie.projetId, this.iterationMax, JSON.stringify(CONTROLES_INITIAUX), JSON.stringify(ETAPES_INITIALES), maintenant, maintenant);
+      .run(
+        saisie.titre,
+        saisie.description,
+        saisie.projetId,
+        saisie.nature,
+        provenance.origine,
+        provenance.trouveSur,
+        this.iterationMax,
+        JSON.stringify(CONTROLES_INITIAUX),
+        JSON.stringify(ETAPES_INITIALES),
+        maintenant,
+        maintenant,
+      );
     return this.lire(Number(lastInsertRowid))!;
   }
 
@@ -177,8 +199,8 @@ export class DepotTickets {
 
   modifier(id: number, saisie: SaisieTicket, maintenant: string): Ticket | null {
     this.base
-      .prepare('UPDATE tickets SET titre = ?, description = ?, projet_id = ?, modifie_le = ? WHERE id = ?')
-      .run(saisie.titre, saisie.description, saisie.projetId, maintenant, id);
+      .prepare('UPDATE tickets SET titre = ?, description = ?, projet_id = ?, nature = ?, modifie_le = ? WHERE id = ?')
+      .run(saisie.titre, saisie.description, saisie.projetId, saisie.nature, maintenant, id);
     return this.lire(id);
   }
 

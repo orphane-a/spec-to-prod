@@ -88,3 +88,27 @@ describe('messages de refus', () => {
     expect(resultatDepot(bloque, 'dev')).toMatchObject({ type: 'refus', message: expect.stringContaining('bloqué') });
   });
 });
+
+describe('dépôts d’un bug', () => {
+  const bug = (partiel: Partial<Ticket> = {}) => ticket({ nature: 'bug', description: 'Le bouton reste grisé.', ...partiel });
+
+  it('du backlog vers En dev : lance la correction', () => {
+    expect(resultatDepot(bug(), 'dev')).toEqual({ type: 'action', action: 'LANCER_CORRECTION' });
+  });
+
+  it('du backlog vers En conception : refusé, un bug n’a pas de spec', () => {
+    expect(resultatDepot(bug(), 'conception')).toMatchObject({ type: 'refus', message: expect.stringContaining('conception') });
+  });
+
+  it('du backlog vers En test : refusé', () => {
+    expect(resultatDepot(bug(), 'test').type).toBe('refus');
+  });
+
+  it('sans description : refusé avec le motif de la machine à états', () => {
+    expect(resultatDepot(bug({ description: '' }), 'dev')).toMatchObject({ type: 'refus', message: expect.stringContaining('reproduction') });
+  });
+
+  it('de En test vers Déploiement en prod : même décision qu’une fonctionnalité', () => {
+    expect(resultatDepot(bug({ colonne: 'test' }), 'deploiement')).toEqual({ type: 'action', action: 'DEPLOYER_PROD' });
+  });
+});

@@ -30,6 +30,8 @@ const REGLES: Record<TypeEvenement, Regle> = {
   LANCER_DESIGN: { acteur: 'utilisatrice', depuis: ['conception'] },
   DESIGN_PRET: { acteur: 'systeme', depuis: ['conception'] },
   LANCER_DEV: { acteur: 'utilisatrice', depuis: ['conception'] },
+  // Bug seulement : il part du backlog directement en dev, sa description sert de reproduction.
+  LANCER_CORRECTION: { acteur: 'utilisatrice', depuis: ['backlog'] },
   ITERATION_TERMINEE: { acteur: 'systeme', depuis: ['dev'] },
   DEV_TERMINE: { acteur: 'systeme', depuis: ['dev'] },
   PREPROD_DEPLOYEE: { acteur: 'systeme', depuis: ['dev'] },
@@ -85,6 +87,19 @@ const passage = (de: Colonne, vers: Colonne): EntreeJournal => ({
   detail: `Passage de ${libelle(de)} à ${libelle(vers)}.`,
 });
 
+/** Étapes de la conception, qu'un bug ne traverse jamais. */
+const LANCEMENTS_FONCTIONNALITE: readonly TypeEvenement[] = ['LANCER_CONCEPTION', 'LANCER_DESIGN', 'LANCER_DEV'];
+
+function refusNature(ticket: Ticket, type: TypeEvenement): ResultatTransition | null {
+  if (ticket.nature === 'bug' && LANCEMENTS_FONCTIONNALITE.includes(type)) {
+    return refus('TRANSITION_INTERDITE', 'Un bug se corrige directement : il ne passe pas par la conception.');
+  }
+  if (ticket.nature !== 'bug' && type === 'LANCER_CORRECTION') {
+    return refus('TRANSITION_INTERDITE', 'Seul un bug se corrige directement. Une fonctionnalité passe par la conception.');
+  }
+  return null;
+}
+
 const controlesEnEchec = (c: ControlesDev) => Object.values(c).filter((e) => e !== 'vert').length;
 const toutEstVert = (c: ControlesDev) => controlesEnEchec(c) === 0;
 
@@ -106,6 +121,8 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
   if (!regle.depuis.includes(ticket.colonne)) {
     return refus('TRANSITION_INTERDITE', `Action impossible depuis la colonne ${libelle(ticket.colonne)}.`);
   }
+  const parNature = refusNature(ticket, evenement.type);
+  if (parNature) return parNature;
 
   const t: Ticket = { ...ticket, modifieLe: ctx.maintenant };
 
@@ -159,6 +176,19 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
       return succes(
         { ...t, colonne: 'dev', runEnCours: 'dev', branche, iteration: 0, controles: { ...CONTROLES_INITIAUX } },
         [passage('conception', 'dev'), { type: 'action', detail: `Vous avez lancé le dev sur la branche ${branche}.` }],
+        [demarrer('dev')],
+      );
+    }
+
+    case 'LANCER_CORRECTION': {
+      if (!ticket.description.trim()) return condition('Décrivez le bug avant de lancer la correction : la description sert de reproduction.');
+      const branche = ticket.branche ?? nomBranche(ticket.id, ticket.titre);
+      return succes(
+        { ...t, colonne: 'dev', runEnCours: 'dev', branche, iteration: 0, controles: { ...CONTROLES_INITIAUX } },
+        [
+          { type: 'transition', detail: `Passage de ${libelle('backlog')} à ${libelle('dev')}, sans conception : c’est un bug.` },
+          { type: 'action', detail: `Vous avez lancé la correction sur la branche ${branche}. Claude écrit d’abord un test qui reproduit le bug.` },
+        ],
         [demarrer('dev')],
       );
     }

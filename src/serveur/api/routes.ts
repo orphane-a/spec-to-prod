@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { Evenement } from '../../domaine/types';
+import { NATURES, type Evenement } from '../../domaine/types';
 import type { Depots } from '../base/depots';
 import type { Diffuseur } from '../diffuseur';
 import { ErreurMaquette, POLITIQUE_MAQUETTE, pageErreurMaquette, type LecteurMaquette } from '../maquette';
@@ -11,7 +11,11 @@ const saisieSchema = z.object({
   titre: z.string().trim().min(1, 'Le titre est obligatoire.').max(120, 'Le titre fait 120 caractères au plus.'),
   description: z.string().trim().max(5000).default(''),
   projetId: z.number().int().positive().nullable().default(null),
+  nature: z.enum(NATURES, 'Choisis fonctionnalité ou bug.').default('fonctionnalite'),
 });
+
+/** En modification, une nature absente garde celle du ticket. */
+const modificationSchema = saisieSchema.extend({ nature: z.enum(NATURES, 'Choisis fonctionnalité ou bug.').optional() });
 
 const idSchema = z.object({ id: z.coerce.number().int().positive() });
 const commentaireParamsSchema = idSchema.extend({ commentaireId: z.coerce.number().int().positive() });
@@ -21,6 +25,7 @@ const ACTIONS = {
   'lancer-conception': () => ({ type: 'LANCER_CONCEPTION' }),
   'lancer-design': () => ({ type: 'LANCER_DESIGN' }),
   'lancer-dev': () => ({ type: 'LANCER_DEV' }),
+  'lancer-correction': () => ({ type: 'LANCER_CORRECTION' }),
   'deployer-prod': (corps: unknown) => ({
     type: 'DEPLOYER_PROD',
     confirmation: z.object({ confirmation: z.boolean().default(false) }).parse(corps ?? {}).confirmation,
@@ -46,7 +51,7 @@ export function enregistrerRoutesApi(app: FastifyInstance, service: ServiceTicke
 
   app.patch('/api/tickets/:id', async (requete) => {
     const { id } = idSchema.parse(requete.params);
-    return service.modifier(id, saisieSchema.parse(requete.body));
+    return service.modifier(id, modificationSchema.parse(requete.body));
   });
 
   /**
