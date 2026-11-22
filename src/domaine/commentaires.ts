@@ -30,12 +30,13 @@ export const LIBELLES_SUJET: Record<SujetCommentaire, string> = {
 };
 
 /**
- * Sujets lus par chaque étape Claude. La spec ne lit pas les retours sur le design ou les tests,
- * qui attendent l'étape qui peut s'en servir. Le dev reçoit tout ce qui reste.
+ * Sujets lus par chaque étape Claude. Chaque étape ne consomme que les retours qu'elle peut traiter :
+ * un retour sur la spec attend une nouvelle rédaction de la spec, même si un design passe avant.
+ * Le dev reçoit tout ce qui reste.
  */
 const SUJETS_PAR_ETAPE: Partial<Record<TypeRun, readonly SujetCommentaire[]>> = {
   spec: ['general', 'spec'],
-  design: ['general', 'spec', 'design'],
+  design: ['general', 'design'],
   dev: SUJETS_COMMENTAIRE,
 };
 
@@ -44,6 +45,19 @@ export function commentairesATransmettre(ticket: Pick<Ticket, 'commentaires'>, e
   const sujets = SUJETS_PAR_ETAPE[etape];
   if (!sujets) return [];
   return ticket.commentaires.filter((c) => c.prisEnCompteLe === null && sujets.includes(c.sujet));
+}
+
+/**
+ * Relance demandée par les commentaires en attente d'un ticket en conception, au repos et non bloqué.
+ * Un retour sur la spec (ou général) relance la spec, et le design suivra ; sinon un retour sur le design relance le design.
+ * Les retours sur les tests attendent le dev. Un ticket bloqué attend Relancer, jamais une relance seule.
+ */
+export function relanceParCommentaires(ticket: Ticket): 'RETRAVAILLER_SPEC' | 'RETRAVAILLER_DESIGN' | null {
+  if (ticket.colonne !== 'conception' || ticket.runEnCours || ticket.blocage || !ticket.spec?.trim()) return null;
+  const sujets = new Set(ticket.commentaires.filter((c) => c.prisEnCompteLe === null).map((c) => c.sujet));
+  if (sujets.has('spec') || sujets.has('general')) return 'RETRAVAILLER_SPEC';
+  if (sujets.has('design')) return 'RETRAVAILLER_DESIGN';
+  return null;
 }
 
 export function detailJournalAjout(sujet: SujetCommentaire): string {

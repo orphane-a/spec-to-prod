@@ -40,7 +40,13 @@ const REGLES: Record<TypeEvenement, Regle> = {
   // Le déploiement passe par GitHub Actions : il ne consomme pas de quota Claude.
   QUOTA_ATTEINT: { acteur: 'systeme', depuis: ['conception', 'dev'] },
   RELANCER: { acteur: 'utilisatrice', depuis: ['conception', 'dev', 'deploiement'] },
+  // Un commentaire sur la spec ou le design relance l'étape, sans changer de colonne.
+  RETRAVAILLER_SPEC: { acteur: 'utilisatrice', depuis: ['conception'] },
+  RETRAVAILLER_DESIGN: { acteur: 'utilisatrice', depuis: ['conception'] },
 };
+
+/** Événements déclenchés par un commentaire, jamais par un bouton de la carte. */
+const PAR_COMMENTAIRE: readonly TypeEvenement[] = ['RETRAVAILLER_SPEC', 'RETRAVAILLER_DESIGN'];
 
 /** Run à relancer dans chaque colonne. En conception, seule l'étape qui manque repart. */
 const RUN_A_RELANCER: Partial<Record<Colonne, (ticket: Ticket) => TypeRun>> = {
@@ -276,13 +282,27 @@ export function transition(ticket: Ticket, evenement: Evenement, acteur: Acteur,
       if (run === 'deploiement') relance.etapesDeploiement = { ...ETAPES_INITIALES };
       return succes(relance, [{ type: 'deblocage', detail: `Vous avez relancé le ticket après : ${ticket.blocage.motif}` }], [demarrer(run)]);
     }
+
+    case 'RETRAVAILLER_SPEC':
+      if (ticket.runEnCours) return condition('Attendez la fin du run en cours.');
+      // La nouvelle spec relancera seule le design (SPEC_PRETE), pour qu'il suive.
+      return succes({ ...t, runEnCours: 'spec', branche: ticket.branche ?? nomBranche(ticket.id, ticket.titre) }, [
+        { type: 'action', detail: 'Claude retravaille la spec avec vos commentaires.' },
+      ], [demarrer('spec')]);
+
+    case 'RETRAVAILLER_DESIGN':
+      if (ticket.runEnCours) return condition('Attendez la fin du run en cours.');
+      if (!ticket.spec?.trim()) return condition('Le design demande une spec rattachée au ticket.');
+      return succes({ ...t, runEnCours: 'design', branche: ticket.branche ?? nomBranche(ticket.id, ticket.titre) }, [
+        { type: 'action', detail: 'Claude retravaille le design avec vos commentaires.' },
+      ], [demarrer('design')]);
   }
 }
 
 /** Actions que l'utilisatrice peut déclencher maintenant sur ce ticket. */
 export function actionsDisponibles(ticket: Ticket): TypeEvenement[] {
   const ctx = { maintenant: ticket.modifieLe };
-  return TYPES_EVENEMENT.filter((type) => REGLES[type].acteur === 'utilisatrice').filter((type) => {
+  return TYPES_EVENEMENT.filter((type) => REGLES[type].acteur === 'utilisatrice' && !PAR_COMMENTAIRE.includes(type)).filter((type) => {
     const evenement = (type === 'DEPLOYER_PROD' ? { type, confirmation: true } : { type }) as Evenement;
     return transition(ticket, evenement, 'utilisatrice', ctx).ok;
   });

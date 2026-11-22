@@ -23,6 +23,8 @@ const AUTORISE: Record<TypeEvenement, { acteur: Acteur; depuis: Colonne[]; vers:
   ECHEC: { acteur: 'systeme', depuis: ['conception', 'dev', 'deploiement'], vers: 'meme' },
   QUOTA_ATTEINT: { acteur: 'systeme', depuis: ['conception', 'dev'], vers: 'meme' },
   RELANCER: { acteur: 'utilisatrice', depuis: ['conception', 'dev', 'deploiement'], vers: 'meme', exigeBlocage: true },
+  RETRAVAILLER_SPEC: { acteur: 'utilisatrice', depuis: ['conception'], vers: 'meme' },
+  RETRAVAILLER_DESIGN: { acteur: 'utilisatrice', depuis: ['conception'], vers: 'meme' },
 };
 
 describe('matrice complète des transitions', () => {
@@ -199,6 +201,50 @@ describe('lancer le design à la main', () => {
   it('refuse pendant un run', () => {
     const r = transition({ ...specSeule, runEnCours: 'design' }, EVENEMENTS.LANCER_DESIGN, 'utilisatrice', CTX);
     expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+});
+
+describe('retravailler la spec ou le design après un commentaire', () => {
+  const pret = ticket({ colonne: 'conception', spec: '# v1', specVersion: 1, design: '# D', urlMaquette: URL_MAQUETTE, designVersion: 1, branche: 'claude/12-fiche-personnage' });
+
+  it('relance la rédaction de la spec, sans changer de colonne', () => {
+    const r = transition(pret, EVENEMENTS.RETRAVAILLER_SPEC, 'utilisatrice', CTX);
+    expect(r.ok && r.ticket).toMatchObject({ colonne: 'conception', runEnCours: 'spec', spec: '# v1', specVersion: 1 });
+    expect(r.ok && r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'spec' }]);
+    expect(r.ok && r.journal).toEqual([{ type: 'action', detail: 'Claude retravaille la spec avec vos commentaires.' }]);
+  });
+
+  it('la nouvelle spec relance ensuite le design', () => {
+    const r = transition(pret, EVENEMENTS.RETRAVAILLER_SPEC, 'utilisatrice', CTX);
+    if (!r.ok) throw new Error(r.message);
+    const suite = transition(r.ticket, { type: 'SPEC_PRETE', spec: '# v2' }, 'systeme', CTX);
+    expect(suite.ok && suite.ticket).toMatchObject({ spec: '# v2', specVersion: 2, runEnCours: 'design' });
+  });
+
+  it('relance le design même s’il existe déjà', () => {
+    const r = transition(pret, EVENEMENTS.RETRAVAILLER_DESIGN, 'utilisatrice', CTX);
+    expect(r.ok && r.ticket).toMatchObject({ colonne: 'conception', runEnCours: 'design', design: '# D' });
+    expect(r.ok && r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'design' }]);
+    expect(r.ok && r.journal).toEqual([{ type: 'action', detail: 'Claude retravaille le design avec vos commentaires.' }]);
+  });
+
+  it('refuse pendant un run', () => {
+    for (const type of ['RETRAVAILLER_SPEC', 'RETRAVAILLER_DESIGN'] as const) {
+      expect(transition({ ...pret, runEnCours: 'design' }, EVENEMENTS[type], 'utilisatrice', CTX)).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+    }
+  });
+
+  it('refuse le design sans spec', () => {
+    expect(transition({ ...pret, spec: null }, EVENEMENTS.RETRAVAILLER_DESIGN, 'utilisatrice', CTX)).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+
+  it('refuse sur un ticket bloqué : seul Relancer le fait repartir', () => {
+    const bloque = { ...pret, blocage: { motif: 'Quota Claude atteint', cause: 'quota', le: MAINTENANT, repriseEstimee: null } } as const;
+    expect(transition(bloque, EVENEMENTS.RETRAVAILLER_SPEC, 'utilisatrice', CTX)).toMatchObject({ ok: false, code: 'TICKET_BLOQUE' });
+  });
+
+  it('ne propose pas de bouton sur la carte', () => {
+    expect(actionsDisponibles(pret)).toEqual(['LANCER_DEV']);
   });
 });
 

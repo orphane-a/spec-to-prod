@@ -113,6 +113,9 @@ export const evenementSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ECHEC'), motif: z.string() }),
   z.object({ type: z.literal('QUOTA_ATTEINT'), repriseEstimee: z.string().nullable() }),
   z.object({ type: z.literal('RELANCER') }),
+  // Relances déclenchées par un commentaire de l'utilisatrice, en conception.
+  z.object({ type: z.literal('RETRAVAILLER_SPEC') }),
+  z.object({ type: z.literal('RETRAVAILLER_DESIGN') }),
 ]);
 export type Evenement = z.infer<typeof evenementSchema>;
 export type TypeEvenement = Evenement['type'];
@@ -132,6 +135,8 @@ export const TYPES_EVENEMENT = [
   'ECHEC',
   'QUOTA_ATTEINT',
   'RELANCER',
+  'RETRAVAILLER_SPEC',
+  'RETRAVAILLER_DESIGN',
 ] as const satisfies readonly TypeEvenement[];
 
 export type TypeJournal = 'transition' | 'action' | 'iteration' | 'test' | 'blocage' | 'deblocage' | 'deploiement' | 'spec' | 'design' | 'commentaire';

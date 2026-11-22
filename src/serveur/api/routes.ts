@@ -64,7 +64,7 @@ export function enregistrerRoutesApi(app: FastifyInstance, service: ServiceTicke
 
   /** Commentaires : retours sur la spec, le design ou les tests. Ce ne sont pas des transitions. */
   app.post('/api/tickets/:id/commentaires', async (requete, reponse) => {
-    const ticket = service.commenter(idSchema.parse(requete.params).id, requete.body);
+    const ticket = await service.commenter(idSchema.parse(requete.params).id, requete.body);
     return reponse.code(201).send(ticket);
   });
 

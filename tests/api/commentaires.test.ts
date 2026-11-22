@@ -159,7 +159,8 @@ describe('Transmission des commentaires à Claude', () => {
 
   it('un commentaire n’est transmis qu’une fois', async () => {
     const id = await specPrete();
-    await commenter(id, { sujet: 'general', texte: 'Une fois.' });
+    // Un retour sur les tests ne relance pas la conception : il attend le dev.
+    await commenter(id, { sujet: 'tests', texte: 'Une fois.' });
     await agir(app, id, 'lancer-dev');
     await app.service.recevoir(app.claude.dernierRun().id, { type: 'ECHEC', motif: 'Raté.' });
     await agir(app, id, 'relancer');
@@ -184,5 +185,94 @@ describe('Transmission des commentaires à Claude', () => {
     await commenter(id, { sujet: 'spec', texte: 'Visible par Claude.' });
     await agir(app, id, 'lancer-conception');
     expect(app.claude.demandes.at(-1)!.ticket.commentaires.map((c) => c.texte)).toEqual(['Visible par Claude.']);
+  });
+});
+
+const runs = () => app.claude.demandes.map((d) => d.run.type);
+const details = async (id: number) => (await journal(id)).map((e: { detail: string }) => e.detail);
+
+describe('Relance automatique en conception', () => {
+  it('un commentaire sur la spec relance la spec aussitôt, puis le design suit', async () => {
+    const id = await specPrete();
+    const r = await commenter(id, { sujet: 'spec', texte: 'Ajouter les absences.' });
+    expect(r.statusCode).toBe(201);
+    expect(r.json()).toMatchObject({ colonne: 'conception', runEnCours: 'spec' });
+    expect(r.json().commentaires[0].prisEnCompteLe).not.toBeNull();
+    expect(runs()).toEqual(['spec', 'design', 'spec']);
+    expect(app.claude.demandes.at(-1)!.ticket.commentaires.map((c) => c.texte)).toEqual(['Ajouter les absences.']);
+    expect(await details(id)).toContain('Claude retravaille la spec avec vos commentaires.');
+
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'SPEC_PRETE', spec: '# Spec v2' });
+    expect(await lire(id)).toMatchObject({ spec: '# Spec v2', specVersion: 2, runEnCours: 'design' });
+  });
+
+  it('un commentaire général relance aussi la spec', async () => {
+    const id = await specPrete();
+    await commenter(id, { sujet: 'general', texte: 'Penser au mobile.' });
+    expect(runs().at(-1)).toBe('spec');
+  });
+
+  it('un commentaire sur le design relance seulement le design', async () => {
+    const id = await specPrete();
+    const r = await commenter(id, { sujet: 'design', texte: 'Bouton plus grand.' });
+    expect(r.json()).toMatchObject({ runEnCours: 'design', spec: '# Spec' });
+    expect(runs()).toEqual(['spec', 'design', 'design']);
+    expect(await details(id)).toContain('Claude retravaille le design avec vos commentaires.');
+  });
+
+  it('un commentaire sur les tests ne relance rien', async () => {
+    const id = await specPrete();
+    const r = await commenter(id, { sujet: 'tests', texte: 'Tester sur mobile.' });
+    expect(r.json().runEnCours).toBeNull();
+    expect(r.json().commentaires[0].prisEnCompteLe).toBeNull();
+    expect(runs()).toEqual(['spec', 'design']);
+  });
+
+  it('pendant un run, le commentaire attend sa fin puis relance l’étape', async () => {
+    const { id } = await creerTicket(app);
+    await agir(app, id, 'lancer-conception');
+    await commenter(id, { sujet: 'spec', texte: 'Écrit pendant la rédaction.' });
+    expect(runs()).toEqual(['spec']);
+
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'SPEC_PRETE', spec: '# Spec' });
+    // Le design ne consomme pas un retour sur la spec : il reste en attente.
+    expect(app.claude.demandes.at(-1)!.ticket.commentaires).toHaveLength(1);
+    expect(runs()).toEqual(['spec', 'design']);
+    expect((await lire(id)).commentaires[0].prisEnCompteLe).toBeNull();
+
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'DESIGN_PRET', resume: '# Design', urlMaquette: 'https://github.com/o/r/blob/b/m.html' });
+    expect(runs()).toEqual(['spec', 'design', 'spec']);
+    expect((await lire(id)).commentaires[0].prisEnCompteLe).not.toBeNull();
+  });
+
+  it('un ticket bloqué ne repart pas : le commentaire attend Relancer', async () => {
+    const { id } = await creerTicket(app);
+    await agir(app, id, 'lancer-conception');
+    await app.service.recevoir(app.claude.dernierRun().id, { type: 'QUOTA_ATTEINT', repriseEstimee: null });
+    const r = await commenter(id, { sujet: 'spec', texte: 'Attendra.' });
+    expect(r.json().blocage).not.toBeNull();
+    expect(r.json().commentaires[0].prisEnCompteLe).toBeNull();
+    expect(runs()).toEqual(['spec']);
+
+    await agir(app, id, 'relancer');
+    expect((await lire(id)).commentaires[0].prisEnCompteLe).not.toBeNull();
+  });
+
+  it('dans le backlog, le commentaire attend le lancement de la conception', async () => {
+    const { id } = await creerTicket(app);
+    const r = await commenter(id, { sujet: 'spec', texte: 'Pour plus tard.' });
+    expect(r.json()).toMatchObject({ colonne: 'backlog', runEnCours: null });
+    expect(runs()).toEqual([]);
+  });
+
+  it('si la relance échoue, le commentaire est enregistré et reste en attente', async () => {
+    const id = await specPrete();
+    app.claude.comportement = async () => {
+      throw new Error('panne');
+    };
+    const r = await commenter(id, { sujet: 'spec', texte: 'Gardé.' });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().blocage).not.toBeNull();
+    expect(r.json().commentaires[0]).toMatchObject({ texte: 'Gardé.', prisEnCompteLe: null });
   });
 });
