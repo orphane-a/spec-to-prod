@@ -344,6 +344,12 @@ describe('En dev vers En test', () => {
     expect(r.ok && r.ticket.scenarios).toHaveLength(2);
   });
 
+  it('un conflit avec la branche principale en préprod bloque avec la cause conflit', () => {
+    const r = transition(enPreprod, { type: 'ECHEC', motif: 'Conflit avec main.', conflit: true }, 'systeme', CTX);
+    expect(r.ok && r.ticket.colonne).toBe('dev');
+    expect(r.ok && r.ticket.blocage).toMatchObject({ motif: 'Conflit avec main.', cause: 'conflit' });
+  });
+
   it('le quota Claude ne concerne pas la préprod', () => {
     expect(transition(enPreprod, EVENEMENTS.QUOTA_ATTEINT, 'systeme', CTX)).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
   });
@@ -403,6 +409,12 @@ describe('Déploiement en prod vers Done', () => {
 
   it('refuse sans version', () => {
     expect(transition(enDeploiement, { type: 'DEPLOIEMENT_TERMINE', version: ' ' }, 'systeme', CTX)).toMatchObject({ ok: false });
+  });
+
+  it('un conflit en prod reste un échec : le ticket ne revient jamais en dev', () => {
+    const r = transition(enDeploiement, { type: 'ECHEC', motif: 'Conflit avec main.', conflit: true }, 'systeme', CTX);
+    expect(r.ok && r.ticket.colonne).toBe('deploiement');
+    expect(r.ok && r.ticket.blocage?.cause).toBe('echec');
   });
 
   it('un échec de déploiement bloque sans jamais passer en Done', () => {
@@ -467,6 +479,16 @@ describe('blocages et relance', () => {
     it('refuse tant que la préprod est occupée par un autre ticket', () => {
       const r = transition(devPret, EVENEMENTS.RELANCER, 'utilisatrice', { ...CTX, preprodOccupeePar: 7 });
       expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE', message: 'Préprod occupée par le ticket 7.' });
+    });
+
+    it('relance la boucle de dev quand la branche est en conflit avec la branche principale', () => {
+      const enConflit = { ...devPret, blocage: { motif: 'Conflit avec main.', cause: 'conflit' as const, le: MAINTENANT, repriseEstimee: null } };
+      const r = transition(enConflit, EVENEMENTS.RELANCER, 'utilisatrice', CTX);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.ticket.runEnCours).toBe('dev');
+      expect(r.ticket.iteration).toBe(0);
+      expect(r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'dev' }]);
     });
 
     it('relance la boucle de dev si les contrôles ne sont pas tous verts', () => {

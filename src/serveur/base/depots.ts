@@ -186,7 +186,9 @@ export class DepotTickets {
   occupantPreprod(projetId: number, saufTicketId: number): number | null {
     const ligne = this.base
       .prepare(
-        `SELECT id FROM tickets WHERE projet_id = ? AND id != ? AND (colonne = 'test' OR run_en_cours = 'preprod')
+        // Un ticket en déploiement garde la préprod : tant que sa fusion n'est pas dans main,
+        // le suivant serait testé sans elle et entrerait en conflit au moment de la prod.
+        `SELECT id FROM tickets WHERE projet_id = ? AND id != ? AND (colonne IN ('test', 'deploiement') OR run_en_cours = 'preprod')
          ORDER BY modifie_le LIMIT 1`,
       )
       .get(projetId, saufTicketId) as Ligne | undefined;

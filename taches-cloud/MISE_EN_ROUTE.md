@@ -114,7 +114,8 @@ Colle le dans Coolify sous `GITHUB_JETON`. Il sert à lancer les pipelines et à
 |---|---|---|
 | Quota Claude atteint | La tâche cloud a répondu 429 : limite de lancements (30 par heure par tâche, 100 par heure sur le compte) ou quota de l'abonnement | Attendre l'heure de reprise, puis cliquer sur Relancer |
 | La session ne donne plus de nouvelles | Aucun signalement depuis `RUN_SILENCE_MAX_MIN` minutes : quota épuisé en cours de route, session ou pipeline arrêté | Ouvrir le lien du journal, puis Relancer |
-| Préprod occupée par le ticket X | Un autre ticket du même projet est en test sur la préprod | Mettre l'autre ticket en prod, puis Relancer |
+| Préprod occupée par le ticket X | Un autre ticket du même projet est en test ou en cours de mise en prod | Attendre que l'autre ticket soit en Done, puis Relancer |
+| La branche du ticket est en conflit avec la branche principale | Un autre ticket est parti en prod pendant le dev et touche les mêmes fichiers | Relancer : Claude refait le dev pour résoudre le conflit, puis la préprod repart |
 | Le pipeline preprod (ou prod) a échoué | Erreur dans GitHub Actions : SSH, build, ou version jamais apparue | Ouvrir le lien du run GitHub, corriger, puis Relancer |
 | Pipeline introuvable | `spec-to-prod.yml` absent de la branche principale du projet | Fusionner la pull request du pipeline |
 | Le jeton GitHub (ou de la tâche cloud) est refusé | Jeton expiré ou mal copié | En générer un nouveau et le mettre à jour dans Coolify |
