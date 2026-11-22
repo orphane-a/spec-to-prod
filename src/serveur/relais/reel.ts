@@ -1,6 +1,6 @@
 import type { Projet } from '../base/depots';
 import { commentairesATransmettre } from '../../domaine/commentaires';
-import { SOURCES } from './webhooks';
+import { CHEMIN_BUG, SOURCES } from './webhooks';
 import { QuotaAtteintErreur, type DemandeRun, type Executeur, type ReponseLancement } from './executeur';
 
 /**
@@ -38,16 +38,20 @@ const CONSIGNES: Record<EtapeClaude, string> = {
   dev: 'Développe le ticket sur sa branche à partir de la spec, de la maquette et de ses commentaires, avec la boucle de tests, puis signale DEV_TERMINE.',
 };
 
+const CONSIGNE_BUG =
+  'Corrige le bug décrit dans la description du ticket, sur une nouvelle branche : écris d’abord un test qui le reproduit, puis corrige avec la boucle de tests, puis signale DEV_TERMINE.';
+
 /** Charge utile transmise à la session. Elle est lue comme une donnée par le prompt enregistré de la tâche. */
 export function construireCharge({ run, ticket, projet }: DemandeRun, urlRelais: string) {
   const etape = run.type as EtapeClaude;
   return {
     version: 1,
     etape,
-    consigne: CONSIGNES[etape],
+    consigne: etape === 'dev' && ticket.nature === 'bug' ? CONSIGNE_BUG : CONSIGNES[etape],
     runId: run.id,
     ticket: {
       id: ticket.id,
+      nature: ticket.nature,
       titre: ticket.titre,
       description: ticket.description,
       branche: ticket.branche,
@@ -59,6 +63,8 @@ export function construireCharge({ run, ticket, projet }: DemandeRun, urlRelais:
     projet: { nom: projet!.nom, depot: projet!.depot, urlPreprod: projet!.urlPreprod },
     relais: {
       webhook: new URL(SOURCES.claude.chemin, urlRelais).toString(),
+      // Bugs hors périmètre trouvés par le test exploratoire du dev.
+      ...(etape === 'dev' ? { webhookBug: new URL(CHEMIN_BUG, urlRelais).toString() } : {}),
       script: 'taches-cloud/signaler.mjs, dans le dépôt orphane-a/spec-to-prod',
     },
   };

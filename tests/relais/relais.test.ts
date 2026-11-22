@@ -163,6 +163,37 @@ describe('mode simulé de bout en bout', () => {
     expect(app.depots.quota.lire().pourcentageSemaine).toBeGreaterThan(12);
   });
 
+  it('mène un bug du backlog à Done sans conception, avec deux décisions seulement', async () => {
+    const app = creerAppSimulee();
+    const r = await app.serveur.inject({
+      method: 'POST',
+      url: '/api/tickets',
+      payload: { titre: 'Date décalée dans le planning', description: 'La date affichée a un jour de retard.', projetId: 3, nature: 'bug' },
+    });
+    const id = r.json().id as number;
+
+    await agirSur(app, id, 'lancer-correction');
+    let t = await attendre(app, id, (x) => x.colonne === 'test');
+    expect(t.spec).toBe(null);
+    expect(t.scenarios.map((s) => s.objectif)).toEqual(['Rejouer le bug', 'Vérifier le cas voisin']);
+
+    await agirSur(app, id, 'deployer-prod', { confirmation: true });
+    t = await attendre(app, id, (x) => x.colonne === 'done');
+    expect(t.nature).toBe('bug');
+  });
+
+  it('#simu:bug-trouve : l’agent de test signale un bug qui attend dans le backlog', async () => {
+    const app = creerAppSimulee();
+    const id = await nouveauTicket(app, 'Idée #simu:bug-trouve');
+    await agirSur(app, id, 'lancer-conception');
+    await attendre(app, id, (x) => x.urlMaquette !== null);
+    await agirSur(app, id, 'lancer-dev');
+    await attendre(app, id, (x) => x.colonne === 'test');
+    const bugs = app.service.lister().filter((x) => x.trouveSur === id);
+    expect(bugs).toHaveLength(1);
+    expect(bugs[0]).toMatchObject({ nature: 'bug', origine: 'agent', colonne: 'backlog', runEnCours: null });
+  });
+
   it('ne passe jamais seul en prod : le ticket attend en test', async () => {
     const app = creerAppSimulee();
     const id = await nouveauTicket(app);
