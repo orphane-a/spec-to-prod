@@ -4,6 +4,15 @@ interface Props {
   couleur?: string;
 }
 
+export function IconeBug({ taille = 18, couleur = 'var(--rouge-texte)' }: Props) {
+  return (
+    <svg width={taille} height={taille} viewBox="0 0 24 24" fill="none" stroke={couleur} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <ellipse cx="12" cy="14" rx="5" ry="6" />
+      <path d="M12 8V4M9 5l1.5 2M15 5l-1.5 2M7 11H3M17 11h4M7 15H3M17 15h4M8 19l-2 2M16 19l2 2" />
+    </svg>
+  );
+}
+
 export function IconePersonne({ taille = 16, couleur = 'var(--encre)' }: Props) {
   return (
     <svg width={taille} height={taille} viewBox="0 0 24 24" fill="none" stroke={couleur} strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">

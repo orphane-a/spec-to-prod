@@ -1,5 +1,5 @@
 import type { Projet, Quota } from '../api';
-import { IconePlus, Logo } from './Icones';
+import { IconeBug, IconePlus, Logo } from './Icones';
 
 interface Props {
   projets: Projet[];
@@ -7,9 +7,10 @@ interface Props {
   choisirFiltre: (projetId: number | null) => void;
   quota: Quota | null;
   ajouter: () => void;
+  signalerBug: () => void;
 }
 
-export function Entete({ projets, filtre, choisirFiltre, quota, ajouter }: Props) {
+export function Entete({ projets, filtre, choisirFiltre, quota, ajouter, signalerBug }: Props) {
   return (
     <header className="entete">
       <div className="marque">
@@ -31,6 +32,10 @@ export function Entete({ projets, filtre, choisirFiltre, quota, ajouter }: Props
         <button type="button" className="bouton bouton-encre" onClick={ajouter}>
           <IconePlus />
           Ajouter un ticket
+        </button>
+        <button type="button" className="bouton bouton-bug" onClick={signalerBug}>
+          <IconeBug />
+          Signaler un bug
         </button>
       </div>
     </header>

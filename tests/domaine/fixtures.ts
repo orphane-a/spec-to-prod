@@ -12,6 +12,9 @@ export function ticket(partiel: Partial<Ticket> = {}): Ticket {
     titre: 'Fiche personnage',
     description: 'Une fiche par joueur.',
     projetId: 1,
+    nature: 'fonctionnalite',
+    origine: 'utilisatrice',
+    trouveSur: null,
     colonne: 'backlog',
     blocage: null,
     runEnCours: null,
@@ -53,6 +56,7 @@ export const EVENEMENTS: Record<TypeEvenement, Evenement> = {
   LANCER_DESIGN: { type: 'LANCER_DESIGN' },
   DESIGN_PRET: { type: 'DESIGN_PRET', resume: '# Design\n\nÉcrans.', urlMaquette: URL_MAQUETTE },
   LANCER_DEV: { type: 'LANCER_DEV' },
+  LANCER_CORRECTION: { type: 'LANCER_CORRECTION' },
   ITERATION_TERMINEE: { type: 'ITERATION_TERMINEE', iteration: 1, controles: { unitaires: 'vert', non_regression: 'en_cours', exploratoire: 'en_attente' } },
   DEV_TERMINE: { type: 'DEV_TERMINE', controles: TOUT_VERT, scenarios: SCENARIOS },
   PREPROD_DEPLOYEE: { type: 'PREPROD_DEPLOYEE', urlPreprod: 'https://preprod.exemple.fr', version: 'a1b2c3d' },
@@ -82,6 +86,10 @@ export function ticketFavorable(colonne: Ticket['colonne'], type: TypeEvenement,
   };
   const sansDesign = { design: null, urlMaquette: null, designVersion: 0 };
   switch (type) {
+    case 'LANCER_CORRECTION':
+      // Un bug n'a ni spec ni design : sa description sert de reproduction.
+      Object.assign(base, sansDesign, { nature: 'bug', spec: null, specVersion: 0, branche: null, runEnCours: null });
+      break;
     case 'SPEC_PRETE':
       Object.assign(base, sansDesign, { runEnCours: 'spec', spec: null, specVersion: 0 });
       break;

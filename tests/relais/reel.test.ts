@@ -85,8 +85,23 @@ describe('exécuteur réel : appel de /fire', () => {
       runId: 'run-dev',
       ticket: { id: 12, branche: 'claude/12-fiche-personnage', spec: '# Spec', design: '# Design', urlMaquette: URL_MAQUETTE, iterationMax: 5 },
       projet: { depot: 'orphane-a/optivie', urlPreprod: 'https://preprod.optivie.orphane.fr' },
-      relais: { webhook: 'https://kanban.orphane.fr/relais/webhooks/claude' },
+      relais: { webhook: 'https://kanban.orphane.fr/relais/webhooks/claude', webhookBug: 'https://kanban.orphane.fr/relais/webhooks/bug' },
     });
+    expect(charge.ticket.nature).toBe('fonctionnalite');
+  });
+
+  it('pour un bug, transmet la nature et la consigne de reproduire avant de corriger', async () => {
+    const { e, appels } = executeur();
+    await e.lancer({ run: run('dev'), ticket: { ...pret, nature: 'bug', spec: null, design: null, urlMaquette: null }, projet: PROJET });
+    const charge = JSON.parse(JSON.parse(String(appels[0]!.init.body)).text);
+    expect(charge.ticket).toMatchObject({ nature: 'bug', spec: null, description: pret.description });
+    expect(charge.consigne).toContain('test qui le reproduit');
+  });
+
+  it('ne donne le webhook des bugs qu’à la session de dev', async () => {
+    const { e, appels } = executeur();
+    await e.lancer({ run: run('spec'), ticket: pret, projet: PROJET });
+    expect(JSON.parse(JSON.parse(String(appels[0]!.init.body)).text).relais).not.toHaveProperty('webhookBug');
   });
 
   it('n’envoie que le nécessaire : pas de spec à l’étape spec, pas de design avant le dev', async () => {

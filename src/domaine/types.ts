@@ -3,6 +3,14 @@ import { z } from 'zod';
 export const COLONNES = ['backlog', 'conception', 'dev', 'test', 'deploiement', 'done'] as const;
 export type Colonne = (typeof COLONNES)[number];
 
+/** Une fonctionnalité passe par la conception. Un bug part directement en dev. */
+export const NATURES = ['fonctionnalite', 'bug'] as const;
+export type Nature = (typeof NATURES)[number];
+
+/** Qui a signalé le ticket : l'utilisatrice, ou l'agent de test exploratoire d'une session de dev. */
+export const ORIGINES = ['utilisatrice', 'agent'] as const;
+export type Origine = (typeof ORIGINES)[number];
+
 export const ACTEURS = ['utilisatrice', 'systeme'] as const;
 export type Acteur = (typeof ACTEURS)[number];
 
@@ -66,6 +74,10 @@ export interface Ticket {
   titre: string;
   description: string;
   projetId: number | null;
+  nature: Nature;
+  origine: Origine;
+  /** Ticket dont le test exploratoire a trouvé ce bug. Null pour un ticket signalé à la main. */
+  trouveSur: number | null;
   colonne: Colonne;
   blocage: Blocage | null;
   runEnCours: TypeRun | null;
@@ -97,6 +109,7 @@ export const evenementSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('LANCER_DESIGN') }),
   z.object({ type: z.literal('DESIGN_PRET'), resume: z.string(), urlMaquette: z.string() }),
   z.object({ type: z.literal('LANCER_DEV') }),
+  z.object({ type: z.literal('LANCER_CORRECTION') }),
   z.object({
     type: z.literal('ITERATION_TERMINEE'),
     iteration: z.number().int().positive(),
@@ -127,6 +140,7 @@ export const TYPES_EVENEMENT = [
   'LANCER_DESIGN',
   'DESIGN_PRET',
   'LANCER_DEV',
+  'LANCER_CORRECTION',
   'ITERATION_TERMINEE',
   'DEV_TERMINE',
   'PREPROD_DEPLOYEE',

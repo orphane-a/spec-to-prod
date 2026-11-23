@@ -1,4 +1,4 @@
-import type { EvenementJournal, SujetCommentaire, Ticket } from '../domaine/types';
+import type { EvenementJournal, Nature, SujetCommentaire, Ticket } from '../domaine/types';
 
 export interface Projet {
   id: number;
@@ -16,9 +16,10 @@ export interface SaisieTicket {
   titre: string;
   description: string;
   projetId: number | null;
+  nature?: Nature;
 }
 
-export type Action = 'lancer-conception' | 'lancer-design' | 'lancer-dev' | 'deployer-prod' | 'relancer';
+export type Action = 'lancer-conception' | 'lancer-design' | 'lancer-dev' | 'lancer-correction' | 'deployer-prod' | 'relancer';
 
 export class ErreurApi extends Error {}
 

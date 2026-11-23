@@ -32,7 +32,9 @@ const ONGLETS: { id: OngletFiche; libelle: string }[] = [
 ];
 
 export function FicheTicket({ ticket, projet, ongletInitial, fermer, modifier, supprimer, remplacer }: Props) {
-  const [onglet, setOnglet] = useState<OngletFiche>(ongletInitial);
+  // Un bug n'a ni spec ni design : ces onglets ne s'affichent pas.
+  const onglets = ticket.nature === 'bug' ? ONGLETS.filter((o) => o.id !== 'spec' && o.id !== 'design') : ONGLETS;
+  const [onglet, setOnglet] = useState<OngletFiche>(onglets.some((o) => o.id === ongletInitial) ? ongletInitial : 'description');
   const [sujet, setSujet] = useState<SujetCommentaire>('general');
   const enAttente = ticket.commentaires.filter((c) => c.prisEnCompteLe === null).length;
 
@@ -64,7 +66,7 @@ export function FicheTicket({ ticket, projet, ongletInitial, fermer, modifier, s
       )}
 
       <div role="tablist" aria-label="Contenu du ticket" className="onglets">
-        {ONGLETS.map((o) => (
+        {onglets.map((o) => (
           <button
             key={o.id}
             type="button"
@@ -77,8 +79,8 @@ export function FicheTicket({ ticket, projet, ongletInitial, fermer, modifier, s
             onClick={() => setOnglet(o.id)}
             onKeyDown={(e) => {
               if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-              const i = ONGLETS.findIndex((x) => x.id === onglet);
-              const suivant = ONGLETS[(i + (e.key === 'ArrowRight' ? 1 : ONGLETS.length - 1)) % ONGLETS.length]!;
+              const i = onglets.findIndex((x) => x.id === onglet);
+              const suivant = onglets[(i + (e.key === 'ArrowRight' ? 1 : onglets.length - 1)) % onglets.length]!;
               setOnglet(suivant.id);
               document.getElementById(`onglet-${suivant.id}`)?.focus();
             }}
@@ -108,6 +110,11 @@ export function FicheTicket({ ticket, projet, ongletInitial, fermer, modifier, s
 function Description({ ticket, modifier, supprimer }: { ticket: Ticket; modifier: () => void; supprimer: () => void }) {
   return (
     <div className="fenetre-contenu" style={{ padding: 0 }}>
+      {ticket.nature === 'bug' && (
+        <p className="statut bloque" style={{ margin: 0 }}>
+          {ticket.origine === 'agent' ? 'Bug trouvé par l’agent de test pendant un dev.' : 'Bug signalé par vous.'} Il se corrige sans spec ni maquette.
+        </p>
+      )}
       <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{ticket.description || 'Aucune description.'}</p>
       {ticket.urlPreprod && (
         <p style={{ margin: 0 }}>

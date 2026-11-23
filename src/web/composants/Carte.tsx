@@ -1,7 +1,7 @@
 import type { ControlesDev, EtapesDeploiement, EtatControle, Ticket } from '../../domaine/types';
 import { actionsDisponibles } from '../../domaine/machine-etats';
 import { formaterHeure, formaterJour, pluriel } from '../format';
-import { IconeAlerte, IconeCercle, IconeCoche, IconeCroix, IconeRotation } from './Icones';
+import { IconeAlerte, IconeCercle, IconeCoche, IconeCroix, IconePersonne, IconeRotation } from './Icones';
 
 export type OngletFiche = 'description' | 'spec' | 'design' | 'scenarios' | 'commentaires' | 'journal';
 
@@ -13,6 +13,9 @@ interface Props {
   lancerConception: () => void;
   lancerDesign: () => void;
   lancerDev: () => void;
+  lancerCorrection: () => void;
+  /** Titre du ticket dont le test exploratoire a trouvé ce bug, s'il est encore là. */
+  trouveSur: string | null;
   demanderDeploiement: () => void;
   relancer: () => void;
   glissee: boolean;
@@ -70,6 +73,7 @@ function Corps(props: Props) {
 
   switch (ticket.colonne) {
     case 'backlog':
+      if (ticket.nature === 'bug') return <BugEnAttente {...props} />;
       return (
         <>
           {ticket.description && <p className="texte">{premierePhrase(ticket.description)}</p>}
@@ -178,7 +182,7 @@ function Corps(props: Props) {
         <>
           {ticket.branche && <p className="branche">Branche {ticket.branche}</p>}
           <Iterations ticket={ticket} />
-          <Controles controles={ticket.controles} />
+          <Controles controles={ticket.controles} bug={ticket.nature === 'bug'} />
         </>
       );
 
@@ -213,6 +217,43 @@ function Corps(props: Props) {
     default:
       return null;
   }
+}
+
+/** Bug du backlog : son origine, sa description et la correction directe, sans conception. */
+function BugEnAttente(props: Props) {
+  const { ticket, occupe } = props;
+  const possible = actionsDisponibles(ticket).includes('LANCER_CORRECTION');
+  return (
+    <>
+      {ticket.origine === 'agent' ? (
+        <p className="statut en-cours">
+          <IconeRotation taille={14} />
+          Trouvé par l’agent de test
+        </p>
+      ) : (
+        <p className="statut origine">
+          <IconePersonne taille={14} />
+          Signalé par vous
+        </p>
+      )}
+      {ticket.description && <p className="texte">{premierePhrase(ticket.description)}</p>}
+      {props.trouveSur && <p className="texte-petit">Remonté pendant le test exploratoire de « {props.trouveSur} ».</p>}
+      <button
+        type="button"
+        className="bouton bouton-ambre"
+        disabled={occupe || !possible}
+        aria-describedby={possible ? undefined : `correction-${ticket.id}`}
+        onClick={props.lancerCorrection}
+      >
+        Lancer la correction
+      </button>
+      {!possible && (
+        <p className="texte-petit" id={`correction-${ticket.id}`}>
+          Ajoutez une description pour que Claude puisse reproduire le bug.
+        </p>
+      )}
+    </>
+  );
 }
 
 function CarteBloquee(props: Props) {
@@ -250,7 +291,9 @@ function CarteDone({ ticket, projet, ouvrir }: Props) {
         </button>
       </h3>
       <p className="texte">
-        {[projet, ticket.deployeLe ? `en ligne le ${formaterJour(ticket.deployeLe)}` : 'en ligne'].filter(Boolean).join(', ')}
+        {[projet, ticket.deployeLe ? `${ticket.nature === 'bug' ? 'corrigé' : 'en ligne'} le ${formaterJour(ticket.deployeLe)}` : ticket.nature === 'bug' ? 'corrigé' : 'en ligne']
+          .filter(Boolean)
+          .join(', ')}
         {ticket.versionDeployee ? ` (${ticket.versionDeployee})` : ''}
       </p>
     </article>
@@ -291,15 +334,20 @@ const SUFFIXES: Record<EtatControle, (pluriel: boolean) => string> = {
   en_attente: () => 'en attente',
 };
 
-function Controles({ controles }: { controles: ControlesDev }) {
+function Controles({ controles, bug = false }: { controles: ControlesDev; bug?: boolean }) {
   return (
     <ul className="controles" aria-label="Contrôles">
       {(Object.keys(LIBELLES_CONTROLES) as (keyof ControlesDev)[]).map((cle) => {
         const etat = controles[cle];
+        // Pour un bug, les tests unitaires commencent par le test qui reproduit le bug.
+        const texte =
+          bug && cle === 'unitaires'
+            ? `Test qui reproduit le bug ${etat === 'vert' ? 'au vert' : SUFFIXES[etat](false)}`
+            : `${LIBELLES_CONTROLES[cle]} ${SUFFIXES[etat](cle === 'unitaires')}`;
         return (
           <li key={cle} className={classeEtat(etat)}>
             <IconeEtat etat={etat} />
-            {LIBELLES_CONTROLES[cle]} {SUFFIXES[etat](cle === 'unitaires')}
+            {texte}
           </li>
         );
       })}

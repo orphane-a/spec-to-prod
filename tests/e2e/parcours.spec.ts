@@ -286,3 +286,43 @@ test('en conception, un commentaire sur le design relance aussitôt le design', 
   await fiche.getByRole('tab', { name: 'Journal' }).click();
   await expect(fiche.getByText('Claude retravaille le design avec vos commentaires.')).toBeVisible();
 });
+
+const colonneBugs = (page: Page, nom: string) => page.getByRole('region', { name: `Bugs, ${nom}`, exact: true });
+
+test('un bug signalé va du backlog à Done sans conception', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Bugs', level: 2 })).toBeVisible();
+  await expect(colonneBugs(page, 'En conception').getByText('Pas de spec pour un bug : la carte passe directement en dev.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Signaler un bug' }).click();
+  const fenetre = page.getByRole('dialog', { name: 'Signaler un bug' });
+  const titre = 'Le bouton Envoyer reste grisé';
+  await fenetre.getByLabel('Titre').fill(titre);
+  await fenetre.getByLabel('Description').fill('Après le remplissage du formulaire d’inscription, le bouton reste grisé.');
+  // Un autre projet que les parcours précédents, dont la préprod reste occupée par un ticket en test.
+  await fenetre.getByLabel('Projet').selectOption({ label: 'Interface JDR' });
+  await fenetre.getByRole('button', { name: 'Ajouter aux bugs' }).click();
+  await expect(fenetre).toBeHidden();
+
+  const carte = colonneBugs(page, 'Backlog').getByRole('article', { name: titre });
+  await expect(carte.getByText('Signalé par vous')).toBeVisible();
+  await expect(colonne(page, 'Backlog').getByRole('article', { name: titre })).toHaveCount(0);
+  await expect(carte.getByRole('button', { name: 'Lancer la conception' })).toHaveCount(0);
+
+  await carte.getByRole('button', { name: 'Lancer la correction' }).click();
+  const enDev = colonneBugs(page, 'En dev').getByRole('article', { name: titre });
+  await expect(enDev.getByText(/Branche claude\/\d+-le-bouton-envoyer-reste-grise/)).toBeVisible();
+
+  const enTest = colonneBugs(page, 'En test').getByRole('article', { name: titre });
+  await expect(enTest.getByText('2 scénarios à réaliser, aucun encore fait.')).toBeVisible({ timeout: 15_000 });
+
+  await enTest.getByRole('button', { name: 'Ouvrir les scénarios' }).click();
+  const fiche = page.getByRole('dialog', { name: titre });
+  await expect(fiche.getByRole('tab', { name: 'Spec' })).toHaveCount(0);
+  await expect(fiche.getByRole('checkbox', { name: 'Rejouer le bug' })).toBeVisible();
+  await fiche.getByRole('button', { name: 'Fermer' }).click();
+
+  await enTest.getByRole('button', { name: 'Déployer en prod' }).click();
+  await page.getByRole('dialog', { name: 'Déployer en prod ?' }).getByRole('button', { name: 'Oui, déployer en prod' }).click();
+  await expect(colonneBugs(page, 'Done').getByRole('article', { name: titre }).getByText(/corrigé le/)).toBeVisible({ timeout: 15_000 });
+});

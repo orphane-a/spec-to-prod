@@ -44,3 +44,17 @@ export function nomBranche(id: number, titre: string): string {
     .replace(/-+$/g, '');
   return `claude/${id}${slug ? `-${slug}` : ''}`;
 }
+
+/** Durée pendant laquelle un ticket terminé reste affiché dans Done. */
+export const DUREE_AFFICHAGE_DONE_JOURS = 7;
+
+/**
+ * Un ticket hors de Done est toujours affiché. Dans Done, il ne l'est que s'il a été
+ * mis en ligne il y a moins de sept jours (date de déploiement, à défaut dernière modification).
+ */
+export function afficheDansTableau(ticket: { colonne: Colonne; deployeLe: string | null; modifieLe: string }, maintenant: Date): boolean {
+  if (ticket.colonne !== 'done') return true;
+  const termineLe = new Date(ticket.deployeLe ?? ticket.modifieLe).getTime();
+  if (Number.isNaN(termineLe)) return true;
+  return maintenant.getTime() - termineLe <= DUREE_AFFICHAGE_DONE_JOURS * 24 * 60 * 60 * 1000;
+}

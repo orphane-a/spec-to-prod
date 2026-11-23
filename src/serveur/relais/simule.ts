@@ -1,6 +1,6 @@
 import type { ControlesDev, Evenement, Ticket } from '../../domaine/types';
 import { QuotaAtteintErreur, type DemandeRun, type Executeur, type ReponseLancement } from './executeur';
-import { SOURCES } from './webhooks';
+import { CHEMIN_BUG, SOURCES } from './webhooks';
 
 /**
  * Mode simulé : un faux Claude et un faux pipeline qui répondent après quelques secondes
@@ -14,6 +14,7 @@ import { SOURCES } from './webhooks';
  *   #simu:quota               le lancement est refusé pour quota atteint
  *   #simu:echec-preprod       le déploiement en préprod échoue
  *   #simu:echec-deploiement   le déploiement en prod échoue à l'envoi sur le serveur
+ *   #simu:bug-trouve          pendant le dev, l'agent de test signale un bug hors du ticket
  */
 
 export type Envoyer = (chemin: string, corps: object) => Promise<void>;
@@ -26,7 +27,7 @@ export interface OptionsSimulation {
 
 type Etape = { apres: number; corps: Evenement; quota?: number };
 
-type MotCle = 'echec-spec' | 'echec-design' | 'iterations' | 'quota' | 'echec-preprod' | 'echec-deploiement';
+type MotCle = 'echec-spec' | 'echec-design' | 'iterations' | 'quota' | 'echec-preprod' | 'echec-deploiement' | 'bug-trouve';
 
 export class Simulation {
   private readonly minuteries = new Set<NodeJS.Timeout>();
@@ -42,6 +43,7 @@ export class Simulation {
       }
       const etapes = run.type === 'spec' ? this.etapesSpec(ticket) : run.type === 'design' ? this.etapesDesign(ticket) : this.etapesDev(ticket);
       this.programmer(SOURCES.claude.chemin, run.id, etapes);
+      if (run.type === 'dev' && this.consommer(ticket, 'bug-trouve')) this.signalerBug(run.id, ticket);
       return { urlSession: `simulation:${run.id.slice(0, 8)}` };
     },
   };
@@ -80,6 +82,21 @@ export class Simulation {
       }, cumul);
       this.minuteries.add(minuterie);
     }
+  }
+
+  /** L'agent de test croise une anomalie hors du ticket et la signale, pendant la première itération. */
+  private signalerBug(runId: string, ticket: Ticket): void {
+    const minuterie = setTimeout(() => {
+      this.minuteries.delete(minuterie);
+      const bug = {
+        titre: 'Message d’erreur absent sur la page d’accueil',
+        description: `Trouvé pendant le test exploratoire de « ${ticket.titre} ». Ouvrir la page d’accueil hors connexion : la page reste blanche au lieu d’afficher un message (simulation).`,
+      };
+      this.options.envoyer(CHEMIN_BUG, { runId, bug }).catch((e: unknown) => {
+        this.options.journaliser?.(`Simulation : signalement de bug refusé (${e instanceof Error ? e.message : String(e)})`);
+      });
+    }, Math.max(1, Math.floor(this.options.delaiMs / 2)));
+    this.minuteries.add(minuterie);
   }
 
   private quotaSuivant(consommation: number): number {
@@ -209,6 +226,12 @@ function designSimule(ticket: Ticket): string {
 }
 
 function scenariosSimules(ticket: Ticket) {
+  if (ticket.nature === 'bug') {
+    return [
+      { objectif: 'Rejouer le bug', etapes: `Ouvrir la préprod et refaire le parcours décrit dans « ${ticket.titre} ».`, resultatAttendu: 'Le bug ne se produit plus.' },
+      { objectif: 'Vérifier le cas voisin', etapes: 'Refaire le parcours avec une donnée proche, par exemple un autre jour ou un autre compte.', resultatAttendu: 'Tout fonctionne comme avant la correction.' },
+    ];
+  }
   return [
     { objectif: 'Cas nominal', etapes: `Ouvrir la préprod et utiliser « ${ticket.titre} » avec des données valides.`, resultatAttendu: 'Le résultat attendu s’affiche sans erreur.' },
     { objectif: 'Cas d’erreur', etapes: 'Valider le formulaire avec un champ obligatoire vide.', resultatAttendu: 'Un message clair indique le champ à corriger.' },

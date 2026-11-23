@@ -14,6 +14,8 @@ const AUTORISE: Record<TypeEvenement, { acteur: Acteur; depuis: Colonne[]; vers:
   LANCER_DESIGN: { acteur: 'utilisatrice', depuis: ['conception'], vers: 'meme' },
   DESIGN_PRET: { acteur: 'systeme', depuis: ['conception'], vers: 'meme' },
   LANCER_DEV: { acteur: 'utilisatrice', depuis: ['conception'], vers: 'dev' },
+  // Bug seulement (la matrice le joue sur un bug, voir ticketFavorable) : seul passage qui saute une colonne.
+  LANCER_CORRECTION: { acteur: 'utilisatrice', depuis: ['backlog'], vers: 'dev' },
   ITERATION_TERMINEE: { acteur: 'systeme', depuis: ['dev'], vers: 'meme' },
   DEV_TERMINE: { acteur: 'systeme', depuis: ['dev'], vers: 'meme' },
   PREPROD_DEPLOYEE: { acteur: 'systeme', depuis: ['dev'], vers: 'test' },
@@ -56,15 +58,17 @@ describe('matrice complète des transitions', () => {
 });
 
 describe('invariants', () => {
-  it('aucune transition autorisée ne saute de colonne ni ne recule', () => {
+  it('aucune transition autorisée ne saute de colonne ni ne recule, sauf la correction directe d’un bug', () => {
     for (const type of TYPES_EVENEMENT) {
       for (const colonne of COLONNES) {
         for (const acteur of ACTEURS) {
           for (const bloque of [false, true]) {
-            const r = transition(ticketFavorable(colonne, type, bloque), EVENEMENTS[type], acteur, CTX);
+            const avant = ticketFavorable(colonne, type, bloque);
+            const r = transition(avant, EVENEMENTS[type], acteur, CTX);
             if (r.ok) {
               const ecart = indexColonne(r.ticket.colonne) - indexColonne(colonne);
-              expect([0, 1]).toContain(ecart);
+              const sautPermis = type === 'LANCER_CORRECTION' && avant.nature === 'bug' && colonne === 'backlog';
+              expect(sautPermis ? [2] : [0, 1]).toContain(ecart);
             }
           }
         }
@@ -644,5 +648,85 @@ describe('modification et suppression', () => {
 
   it('ne modifie que le backlog', () => {
     expect(COLONNES.filter((colonne) => estModifiable(ticket({ colonne })))).toEqual(['backlog']);
+  });
+});
+
+describe('bugs : correction directe sans spec', () => {
+  const bug = (partiel: Parameters<typeof ticket>[0] = {}) =>
+    ticket({ nature: 'bug', titre: 'Jet de dés affiché deux fois', description: 'Le résultat apparaît deux fois après un jet.', ...partiel });
+
+  it('passe du backlog à En dev et lance la boucle de dev', () => {
+    const r = transition(bug(), EVENEMENTS.LANCER_CORRECTION, 'utilisatrice', CTX);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.ticket).toMatchObject({ colonne: 'dev', runEnCours: 'dev', iteration: 0, branche: 'claude/12-jet-de-des-affiche-deux-fois', spec: null });
+    expect(r.effets).toEqual([{ type: 'DEMARRER_RUN', run: 'dev' }]);
+    expect(r.journal.map((e) => e.detail)).toEqual([
+      'Passage de Backlog à En dev, sans conception : c’est un bug.',
+      'Vous avez lancé la correction sur la branche claude/12-jet-de-des-affiche-deux-fois. Claude écrit d’abord un test qui reproduit le bug.',
+    ]);
+  });
+
+  it('demande une description, qui sert de reproduction', () => {
+    const r = transition(bug({ description: '   ' }), EVENEMENTS.LANCER_CORRECTION, 'utilisatrice', CTX);
+    expect(r).toMatchObject({ ok: false, code: 'CONDITION_NON_REMPLIE' });
+  });
+
+  it.each(['LANCER_CONCEPTION', 'LANCER_DESIGN', 'LANCER_DEV'] as const)('refuse %s pour un bug, dans toutes les colonnes', (type) => {
+    for (const colonne of COLONNES) {
+      const avant = { ...ticketFavorable(colonne, type, false), nature: 'bug' as const };
+      expect(transition(avant, EVENEMENTS[type], 'utilisatrice', CTX).ok).toBe(false);
+    }
+  });
+
+  it('refuse la correction directe pour une fonctionnalité', () => {
+    const r = transition(ticket({ nature: 'fonctionnalite' }), EVENEMENTS.LANCER_CORRECTION, 'utilisatrice', CTX);
+    expect(r).toMatchObject({ ok: false, code: 'TRANSITION_INTERDITE' });
+  });
+
+  it('refuse la correction lancée par le système', () => {
+    expect(transition(bug(), EVENEMENTS.LANCER_CORRECTION, 'systeme', CTX)).toMatchObject({ ok: false, code: 'ACTEUR_INTERDIT' });
+  });
+
+  it('refuse la correction hors du backlog', () => {
+    for (const colonne of COLONNES.filter((c) => c !== 'backlog')) {
+      expect(transition(bug({ colonne }), EVENEMENTS.LANCER_CORRECTION, 'utilisatrice', CTX).ok).toBe(false);
+    }
+  });
+
+  it('propose seulement la correction pour un bug du backlog, et jamais pour une fonctionnalité', () => {
+    expect(actionsDisponibles(bug())).toEqual(['LANCER_CORRECTION']);
+    expect(actionsDisponibles(ticket())).toEqual(['LANCER_CONCEPTION']);
+  });
+
+  it('suit ensuite le même chemin qu’une fonctionnalité, jusqu’à Done avec confirmation', () => {
+    let t = bug();
+    const etapes: [Parameters<typeof transition>[1], 'utilisatrice' | 'systeme'][] = [
+      [EVENEMENTS.LANCER_CORRECTION, 'utilisatrice'],
+      [{ type: 'ITERATION_TERMINEE', iteration: 1, controles: TOUT_VERT }, 'systeme'],
+      [{ type: 'DEV_TERMINE', controles: TOUT_VERT, scenarios: SCENARIOS }, 'systeme'],
+      [EVENEMENTS.PREPROD_DEPLOYEE, 'systeme'],
+      [{ type: 'DEPLOYER_PROD', confirmation: false }, 'utilisatrice'],
+      [EVENEMENTS.DEPLOYER_PROD, 'utilisatrice'],
+      [EVENEMENTS.DEPLOIEMENT_TERMINE, 'systeme'],
+    ];
+    const colonnes: string[] = [];
+    for (const [evenement, acteur] of etapes) {
+      const r = transition(t, evenement, acteur, CTX);
+      if (evenement.type === 'DEPLOYER_PROD' && !evenement.confirmation) {
+        expect(r.ok).toBe(false);
+        continue;
+      }
+      expect(r.ok).toBe(true);
+      if (r.ok) t = r.ticket;
+      colonnes.push(t.colonne);
+    }
+    expect(colonnes).toEqual(['dev', 'dev', 'dev', 'test', 'deploiement', 'done']);
+  });
+
+  it('se relance en dev après un blocage, sans repasser par la conception', () => {
+    const bloque = bug({ colonne: 'dev', blocage: { motif: 'Quota Claude atteint', cause: 'quota', le: MAINTENANT, repriseEstimee: null } });
+    const r = transition(bloque, EVENEMENTS.RELANCER, 'utilisatrice', CTX);
+    expect(r.ok && r.ticket).toMatchObject({ colonne: 'dev', runEnCours: 'dev', blocage: null });
   });
 });
