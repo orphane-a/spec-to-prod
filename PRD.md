@@ -254,6 +254,13 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
   8. Pour le dev, un commentaire qui contredit la spec l'emporte, et la session le signale dans son récapitulatif.
   9. Les prompts de taches-cloud décrivent le champ ticket.commentaires : ils sont à recopier dans les tâches cloud sur claude.ai pour que Claude en tienne compte.
 
+- 🐞 Ligne Bugs (23 novembre 2026) : sous les fonctionnalités, une seconde ligne de six colonnes reçoit les bugs, comme dans la maquette. Un ticket porte une nature, fonctionnalité ou bug, et une origine, vous ou l'agent de test. Valeurs par défaut retenues :
+  1. Un bug part du backlog directement en En dev par le bouton Lancer la correction, toujours manuel. C'est le seul passage qui saute une colonne, réservé aux bugs et couvert par les tests de la machine à états. Un bug ne peut jamais entrer en conception, et une fonctionnalité ne peut jamais utiliser la correction directe.
+  2. Sans spec ni maquette, la description sert de reproduction : la correction est refusée tant qu'elle est vide. La session de dev crée la branche, écrit d'abord un test qui reproduit le bug, puis corrige.
+  3. La suite ne change pas : même boucle de tests, même maximum d'itérations (5), au moins deux scénarios (rejouer le bug, vérifier le cas voisin), mise en prod seulement après votre confirmation.
+  4. Pendant le dev d'un ticket, l'agent de test exploratoire signale les anomalies hors du périmètre par un webhook signé (/relais/webhooks/bug). Le bug arrive dans le backlog du même projet et ne démarre jamais seul. Un doublon (même titre, même ticket d'origine) est ignoré, et un ticket ne peut pas avoir plus de 10 bugs ouverts signalés ainsi.
+  5. La fiche d'un bug n'a ni onglet Spec ni onglet Design. Le glisser déposer suit les mêmes règles, et une carte ne se dépose que dans sa propre ligne.
+
 **Décisions prises pour la connexion à Claude** 🔌
 
 - 🎨 Étape design : elle fait partie de En conception. La spec prête lance seule le design, mais il est facultatif : Lancer le dev exige seulement la spec. Un ticket avec une spec mais sans design propose Lancer le design et Lancer le dev.
