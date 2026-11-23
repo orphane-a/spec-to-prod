@@ -228,6 +228,7 @@ Chaque question porte un choix par défaut, retenu pour avancer tant que la rép
 - 🌿 Nom de branche : claude/identifiant-titre-court, par exemple claude/12-fiche-personnage.
 - 🖱️ Glisser déposer : absent en v1. Seuls les boutons font avancer un ticket, ce qui rend tout saut de colonne impossible.
 - 🔄 Relance d'un ticket bloqué : un bouton Relancer, toujours manuel ; en dev, la boucle repart avec un compteur d'itérations remis à zéro.
+- ✅ Colonne Done : n'affiche que les tickets mis en ligne depuis 7 jours au plus (date de déploiement, à défaut dernière modification). Les plus anciens restent en base, simplement masqués du tableau.
 - 🧪 Scénarios de test : au moins deux (cas nominal et cas d'erreur) pour passer en En test ; ils se cochent seulement pendant la phase de test.
 - ↩️ Retour de En test vers En dev : reporté, il fait partie des exigences P1.
 - 💾 SQLite passe par le module node:sqlite intégré à Node, car la politique de sécurité Windows bloque les modules natifs comme better-sqlite3.
