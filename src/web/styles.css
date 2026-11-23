@@ -191,6 +191,14 @@ button:disabled {
   border: 1.5px solid var(--rouge-texte);
 }
 
+.bouton-bug {
+  font-size: 14px;
+  padding: 0 18px;
+  color: var(--rouge-texte);
+  background: transparent;
+  border: 1.5px solid var(--rouge-texte);
+}
+
 /* Bandeau quota */
 .bandeau {
   display: flex;
@@ -225,6 +233,95 @@ button:disabled {
 }
 
 /* Tableau */
+.ligne {
+  min-width: 1280px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ligne-titre {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.ligne-titre h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.ligne-titre .texte {
+  color: var(--texte-secondaire);
+}
+
+/* Ligne des bugs */
+.ligne-bugs {
+  margin-top: 40px;
+}
+
+.bandeau-bugs {
+  background: var(--rouge-fond);
+  border: 1px solid rgba(176, 42, 36, 0.35);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.bandeau-bugs h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--rouge-texte);
+}
+
+.bandeau-bugs p {
+  margin: 0;
+  flex: 1;
+  min-width: 260px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--texte-secondaire);
+}
+
+.compteur.compteur-bug {
+  background: var(--rouge-texte);
+}
+
+.colonne.colonne-bugs {
+  gap: 8px;
+}
+
+.colonne-titre-bugs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  padding: 0 4px;
+}
+
+.colonne-titre-bugs h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.colonne-bugs .colonne-corps {
+  min-height: 320px;
+}
+
+.colonne-vide.sans-etape {
+  border: 1.5px dashed var(--gris-pointille);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: left;
+}
+
 .defilement {
   overflow-x: auto;
   padding-bottom: 8px;
@@ -495,6 +592,11 @@ button:disabled {
 
 .statut.en-cours {
   color: var(--vert-eau);
+}
+
+.statut.origine {
+  color: var(--encre);
+  font-size: 12px;
 }
 
 .statut.bloque {

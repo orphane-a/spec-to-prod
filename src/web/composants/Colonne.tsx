@@ -18,11 +18,23 @@ interface Props {
   premiere: boolean;
   nombre: number;
   depot: Depot;
+  /** Ligne des bugs : en-tête réduit au nom de la colonne, sans voie. */
+  ligneBugs?: boolean;
   children: ReactNode;
 }
 
+/** Messages de la ligne des bugs quand une colonne est vide. */
+const VIDES_BUGS: Record<DefinitionColonne['id'], string> = {
+  backlog: 'Aucun bug signalé.',
+  conception: 'Pas de spec pour un bug : la carte passe directement en dev.',
+  dev: 'Aucun bug en correction.',
+  test: 'Aucun bug à tester pour l’instant.',
+  deploiement: 'Aucun bug en cours de déploiement.',
+  done: 'Aucun bug corrigé pour l’instant.',
+};
+
 /** Une colonne du tableau, avec son tronçon de voie, sa station et le marqueur de passage. */
-export function Colonne({ definition, premiere, nombre, depot, children }: Props) {
+export function Colonne({ definition, premiere, nombre, depot, ligneBugs = false, children }: Props) {
   const derniere = definition.passage === null;
   const { resultat, survolee } = depot;
   const accepte = resultat?.type === 'action';
@@ -49,6 +61,37 @@ export function Colonne({ definition, premiere, nombre, depot, children }: Props
     e.preventDefault();
     if (accepte) depot.deposer();
     else depot.sortir();
+  }
+
+  const corps = (
+    <div className={classes.join(' ')} onDragOver={survoler} onDragLeave={quitter} onDrop={lacher}>
+      {refus && (
+        <p className="depot-message" role="status">
+          {refus}
+        </p>
+      )}
+      {nombre === 0 ? (
+        <p className={ligneBugs && definition.id === 'conception' ? 'colonne-vide sans-etape' : 'colonne-vide'}>{ligneBugs ? VIDES_BUGS[definition.id] : definition.vide}</p>
+      ) : (
+        children
+      )}
+    </div>
+  );
+
+  if (ligneBugs) {
+    return (
+      <section aria-label={`Bugs, ${definition.libelle}`} className="colonne colonne-bugs">
+        <div className="colonne-titre-bugs">
+          <h3>{definition.libelle}</h3>
+          {nombre > 0 && (
+            <span className="compteur" aria-label={`${nombre} ${nombre > 1 ? 'bugs' : 'bug'}`}>
+              {nombre}
+            </span>
+          )}
+        </div>
+        {corps}
+      </section>
+    );
   }
 
   return (
@@ -81,14 +124,7 @@ export function Colonne({ definition, premiere, nombre, depot, children }: Props
           {definition.ensuite}
         </p>
       </div>
-      <div className={classes.join(' ')} onDragOver={survoler} onDragLeave={quitter} onDrop={lacher}>
-        {refus && (
-          <p className="depot-message" role="status">
-            {refus}
-          </p>
-        )}
-        {nombre === 0 ? <p className="colonne-vide">{definition.vide}</p> : children}
-      </div>
+      {corps}
     </section>
   );
 }

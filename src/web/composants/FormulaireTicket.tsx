@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import type { Ticket } from '../../domaine/types';
+import type { Nature, Ticket } from '../../domaine/types';
 import type { Projet, SaisieTicket } from '../api';
 import { Fenetre } from './Fenetre';
 
@@ -7,11 +7,15 @@ interface Props {
   projets: Projet[];
   ticket?: Ticket;
   projetParDefaut: number | null;
+  /** Nature d'un ticket à créer. En modification, celle du ticket compte. */
+  nature?: Nature;
   enregistrer: (saisie: SaisieTicket) => Promise<void>;
   fermer: () => void;
 }
 
-export function FormulaireTicket({ projets, ticket, projetParDefaut, enregistrer, fermer }: Props) {
+export function FormulaireTicket({ projets, ticket, projetParDefaut, nature: natureNouveau = 'fonctionnalite', enregistrer, fermer }: Props) {
+  const nature = ticket?.nature ?? natureNouveau;
+  const bug = nature === 'bug';
   const [titre, setTitre] = useState(ticket?.titre ?? '');
   const [description, setDescription] = useState(ticket?.description ?? '');
   const [projetId, setProjetId] = useState<number | null>(ticket ? ticket.projetId : projetParDefaut);
@@ -27,7 +31,7 @@ export function FormulaireTicket({ projets, ticket, projetParDefaut, enregistrer
     setEnvoi(true);
     setErreur(null);
     try {
-      await enregistrer({ titre: titre.trim(), description: description.trim(), projetId });
+      await enregistrer({ titre: titre.trim(), description: description.trim(), projetId, nature });
     } catch (err) {
       setErreur(err instanceof Error ? err.message : 'Enregistrement impossible.');
       setEnvoi(false);
@@ -35,7 +39,7 @@ export function FormulaireTicket({ projets, ticket, projetParDefaut, enregistrer
   }
 
   return (
-    <Fenetre titre={ticket ? 'Modifier le ticket' : 'Ajouter un ticket au backlog'} fermer={fermer}>
+    <Fenetre titre={ticket ? (bug ? 'Modifier le bug' : 'Modifier le ticket') : bug ? 'Signaler un bug' : 'Ajouter un ticket au backlog'} fermer={fermer}>
       <form onSubmit={soumettre} className="fenetre-contenu" style={{ padding: 0 }} noValidate>
         <label className="champ">
           Titre
@@ -43,7 +47,13 @@ export function FormulaireTicket({ projets, ticket, projetParDefaut, enregistrer
         </label>
         <label className="champ">
           Description
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={5000} placeholder="Décrivez l'idée en quelques phrases." />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            maxLength={5000}
+            placeholder={bug ? 'Ce que vous faisiez, ce qui s’est passé, ce que vous attendiez.' : "Décrivez l'idée en quelques phrases."}
+          />
+          {bug && <span className="texte-petit">Claude s’en sert pour reproduire le bug : pas de spec pour un bug.</span>}
         </label>
         <label className="champ">
           Projet
@@ -66,7 +76,7 @@ export function FormulaireTicket({ projets, ticket, projetParDefaut, enregistrer
             Annuler
           </button>
           <button type="submit" className="bouton bouton-encre" disabled={envoi}>
-            {ticket ? 'Enregistrer' : 'Ajouter au backlog'}
+            {ticket ? 'Enregistrer' : bug ? 'Ajouter aux bugs' : 'Ajouter au backlog'}
           </button>
         </div>
       </form>

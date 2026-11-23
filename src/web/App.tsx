@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { DEFINITIONS_COLONNES } from '../domaine/colonnes';
+import { afficheDansTableau, DEFINITIONS_COLONNES } from '../domaine/colonnes';
 import { resultatDepot, type ActionDepot } from '../domaine/glisser-deposer';
-import type { Colonne as IdColonne, Ticket } from '../domaine/types';
+import type { Nature, Ticket } from '../domaine/types';
 import { api, type Action } from './api';
 import { Carte, type OngletFiche } from './composants/Carte';
 import { Colonne } from './composants/Colonne';
@@ -9,13 +9,13 @@ import { Confirmation } from './composants/Confirmation';
 import { Entete } from './composants/Entete';
 import { FicheTicket } from './composants/FicheTicket';
 import { FormulaireTicket } from './composants/FormulaireTicket';
-import { IconeAlerte } from './composants/Icones';
+import { IconeAlerte, IconeBug } from './composants/Icones';
 import { formaterHeure } from './format';
 import { useTableau } from './useTableau';
 
 type Fenetre =
   | { type: 'aucune' }
-  | { type: 'ajout' }
+  | { type: 'ajout'; nature: Nature }
   | { type: 'modification'; id: number }
   | { type: 'fiche'; id: number; onglet: OngletFiche }
   | { type: 'deploiement'; id: number }
@@ -28,11 +28,13 @@ export function App() {
   const [occupes, setOccupes] = useState<Set<number>>(new Set());
   const [erreurAction, setErreurAction] = useState<string | null>(null);
   const [glisseId, setGlisseId] = useState<number | null>(null);
-  const [survol, setSurvol] = useState<IdColonne | null>(null);
+  /** Colonne survolée pendant un glisser, dans sa ligne : `fonctionnalite:dev` ou `bug:dev`. */
+  const [survol, setSurvol] = useState<string | null>(null);
 
   const nomProjet = (id: number | null) => projets.find((p) => p.id === id)?.nom ?? null;
   const ticketPar = (id: number) => tickets.find((t) => t.id === id);
-  const visibles = filtre === null ? tickets : tickets.filter((t) => t.projetId === filtre);
+  const maintenant = new Date();
+  const visibles = tickets.filter((t) => (filtre === null || t.projetId === filtre) && afficheDansTableau(t, maintenant));
   const fermer = () => setFenetre({ type: 'aucune' });
 
   async function agir(ticket: Ticket, action: Action, corps?: unknown) {
@@ -63,17 +65,75 @@ export function App() {
     finGlisser();
     if (action === 'LANCER_CONCEPTION') void agir(ticket, 'lancer-conception');
     else if (action === 'LANCER_DEV') void agir(ticket, 'lancer-dev');
+    else if (action === 'LANCER_CORRECTION') void agir(ticket, 'lancer-correction');
     else setFenetre({ type: 'deploiement', id: ticket.id });
   }
 
-  const ficheOuverte =fenetre.type === 'fiche' ? ticketPar(fenetre.id) : undefined;
+  const titreDe = (id: number | null) => (id === null ? null : (ticketPar(id)?.titre ?? null));
+  const fonctionnalites = visibles.filter((t) => t.nature !== 'bug');
+  const bugs = visibles.filter((t) => t.nature === 'bug');
+
+  /** Les six colonnes d'une ligne. Une carte ne se dépose que dans sa propre ligne. */
+  function colonnes(nature: Nature, contenus: Ticket[]) {
+    const ligneBugs = nature === 'bug';
+    return DEFINITIONS_COLONNES.map((definition, index) => {
+      const contenu = contenus.filter((t) => t.colonne === definition.id);
+      const cle = `${nature}:${definition.id}`;
+      const resultat = glisse && (glisse.nature === 'bug') === ligneBugs ? resultatDepot(glisse, definition.id) : null;
+      return (
+        <Colonne
+          key={cle}
+          definition={definition}
+          premiere={index === 0}
+          nombre={contenu.length}
+          ligneBugs={ligneBugs}
+          depot={{
+            resultat,
+            survolee: survol === cle,
+            entrer: () => setSurvol(cle),
+            sortir: () => setSurvol((s) => (s === cle ? null : s)),
+            deposer: () => glisse && resultat?.type === 'action' && deposer(glisse, resultat.action),
+          }}
+        >
+          {contenu.map((ticket) => (
+            <Carte
+              key={ticket.id}
+              ticket={ticket}
+              glissee={glisseId === ticket.id}
+              commencerGlisser={() => setGlisseId(ticket.id)}
+              finirGlisser={finGlisser}
+              projet={nomProjet(ticket.projetId)}
+              trouveSur={titreDe(ticket.trouveSur)}
+              occupe={occupes.has(ticket.id)}
+              ouvrir={(onglet) => setFenetre({ type: 'fiche', id: ticket.id, onglet: onglet ?? (ticket.blocage ? 'journal' : 'description') })}
+              lancerConception={() => agir(ticket, 'lancer-conception')}
+              lancerDesign={() => agir(ticket, 'lancer-design')}
+              lancerDev={() => agir(ticket, 'lancer-dev')}
+              lancerCorrection={() => agir(ticket, 'lancer-correction')}
+              demanderDeploiement={() => setFenetre({ type: 'deploiement', id: ticket.id })}
+              relancer={() => agir(ticket, 'relancer')}
+            />
+          ))}
+        </Colonne>
+      );
+    });
+  }
+
+  const ficheOuverte = fenetre.type === 'fiche' ? ticketPar(fenetre.id) : undefined;
   const aModifier = fenetre.type === 'modification' ? ticketPar(fenetre.id) : undefined;
   const aDeployer = fenetre.type === 'deploiement' ? ticketPar(fenetre.id) : undefined;
   const aSupprimer = fenetre.type === 'suppression' ? ticketPar(fenetre.id) : undefined;
 
   return (
     <div className="page">
-      <Entete projets={projets} filtre={filtre} choisirFiltre={setFiltre} quota={quota} ajouter={() => setFenetre({ type: 'ajout' })} />
+      <Entete
+        projets={projets}
+        filtre={filtre}
+        choisirFiltre={setFiltre}
+        quota={quota}
+        ajouter={() => setFenetre({ type: 'ajout', nature: 'fonctionnalite' })}
+        signalerBug={() => setFenetre({ type: 'ajout', nature: 'bug' })}
+      />
 
       {quota?.epuise && (
         <div className="bandeau" role="status">
@@ -105,51 +165,32 @@ export function App() {
       )}
 
       <main className="defilement" aria-busy={chargement}>
-        <div className="tableau">
-          {DEFINITIONS_COLONNES.map((definition, index) => {
-            const contenu = visibles.filter((t) => t.colonne === definition.id);
-            const resultat = glisse ? resultatDepot(glisse, definition.id) : null;
-            return (
-              <Colonne
-                key={definition.id}
-                definition={definition}
-                premiere={index === 0}
-                nombre={contenu.length}
-                depot={{
-                  resultat,
-                  survolee: survol === definition.id,
-                  entrer: () => setSurvol(definition.id),
-                  sortir: () => setSurvol((s) => (s === definition.id ? null : s)),
-                  deposer: () => glisse && resultat?.type === 'action' && deposer(glisse, resultat.action),
-                }}
-              >
-                {contenu.map((ticket) => (
-                  <Carte
-                    key={ticket.id}
-                    ticket={ticket}
-                    glissee={glisseId === ticket.id}
-                    commencerGlisser={() => setGlisseId(ticket.id)}
-                    finirGlisser={finGlisser}
-                    projet={nomProjet(ticket.projetId)}
-                    occupe={occupes.has(ticket.id)}
-                    ouvrir={(onglet) => setFenetre({ type: 'fiche', id: ticket.id, onglet: onglet ?? (ticket.blocage ? 'journal' : 'description') })}
-                    lancerConception={() => agir(ticket, 'lancer-conception')}
-                    lancerDesign={() => agir(ticket, 'lancer-design')}
-                    lancerDev={() => agir(ticket, 'lancer-dev')}
-                    demanderDeploiement={() => setFenetre({ type: 'deploiement', id: ticket.id })}
-                    relancer={() => agir(ticket, 'relancer')}
-                  />
-                ))}
-              </Colonne>
-            );
-          })}
-        </div>
+        <section aria-labelledby="ligne-fonctionnalites" className="ligne">
+          <div className="ligne-titre">
+            <h2 id="ligne-fonctionnalites">Fonctionnalités</h2>
+            <span className="texte">Chaque ticket passe par la conception et la spec</span>
+          </div>
+          <div className="tableau">{colonnes('fonctionnalite', fonctionnalites)}</div>
+        </section>
+
+        <section aria-labelledby="ligne-bugs" className="ligne ligne-bugs">
+          <div className="bandeau-bugs">
+            <IconeBug taille={26} />
+            <h2 id="ligne-bugs">Bugs</h2>
+            <span className="compteur compteur-bug" aria-label={`${bugs.length} ${bugs.length > 1 ? 'bugs' : 'bug'}`}>
+              {bugs.length}
+            </span>
+            <p>Correction directe, sans phase de spec. Les bugs trouvés par l’agent de test exploratoire arrivent ici.</p>
+          </div>
+          <div className="tableau">{colonnes('bug', bugs)}</div>
+        </section>
       </main>
 
       {fenetre.type === 'ajout' && (
         <FormulaireTicket
           projets={projets}
           projetParDefaut={filtre}
+          nature={fenetre.nature}
           fermer={fermer}
           enregistrer={async (saisie) => {
             remplacer(await api.creer(saisie));

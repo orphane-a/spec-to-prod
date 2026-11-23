@@ -14,6 +14,8 @@ export default defineConfig({
     channel: process.env.PW_CHANNEL ?? 'msedge',
     locale: 'fr-FR',
     timezoneId: 'Europe/Paris',
+    // Les deux lignes (fonctionnalités et bugs) tiennent à l'écran : un défilement en plein glisser annulerait le geste.
+    viewport: { width: 1440, height: 1400 },
     trace: 'retain-on-failure',
   },
   webServer: {
